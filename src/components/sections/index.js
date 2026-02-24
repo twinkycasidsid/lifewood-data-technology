@@ -1,0 +1,7 @@
+export { default as Hero } from './Hero'
+export { default as About } from './About'
+export { default as ImpactStats } from './Metrics'
+export { default as Capabilities } from './Capabilities'
+export { default as ESG } from './Services'
+export { default as GlobalPresence } from './Global'
+export { default as CTA } from './CallToAction'
