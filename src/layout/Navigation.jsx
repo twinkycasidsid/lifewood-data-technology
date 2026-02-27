@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Phone, UserCircle2, Menu, X } from "lucide-react";
-
+import { useNavigate, useLocation } from "react-router-dom";
 // ─── Nav Data ────────────────────────────────────────────────────────────────
 const navItems = [
   { label: "Home", href: "/" },
@@ -39,6 +39,8 @@ const Navigation = ({
   onNavigate = () => {},
   onSetAuthMode = () => {},
 }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [hoverTimeout, setHoverTimeout] = useState(null);
@@ -56,15 +58,16 @@ const Navigation = ({
 
   useEffect(() => {
     document.body.style.overflow = isMobileMenuOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [isMobileMenuOpen]);
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
     setOpenMobileSection(null);
     setActiveDropdown(null);
-  }, [currentPath]);
-
+  }, [location.pathname]);
   const closeAll = () => {
     setIsMobileMenuOpen(false);
     setOpenMobileSection(null);
@@ -287,12 +290,17 @@ const Navigation = ({
           left: 0,
           width: "100%",
           zIndex: 1000,
-          background: isScrolled ? "rgba(10,22,14,0.72)" : "rgba(10,22,14,0.42)",
+          background: isScrolled
+            ? "rgba(10,22,14,0.72)"
+            : "rgba(10,22,14,0.42)",
           backdropFilter: "blur(20px)",
           WebkitBackdropFilter: "blur(20px)",
-          borderBottom: isScrolled ? "1px solid rgba(255,255,255,0.08)" : "1px solid transparent",
+          borderBottom: isScrolled
+            ? "1px solid rgba(255,255,255,0.08)"
+            : "1px solid transparent",
           boxShadow: isScrolled ? "0 8px 40px rgba(0,0,0,0.28)" : "none",
-          transition: "background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, height 0.3s ease",
+          transition:
+            "background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease, height 0.3s ease",
           height: isScrolled ? "64px" : "80px",
           display: "flex",
           alignItems: "center",
@@ -316,7 +324,7 @@ const Navigation = ({
           {/* Logo */}
           <button
             type="button"
-            onClick={() => onNavigate("/")}
+            onClick={() => navigate("/")}
             aria-label="Go to home page"
             style={{
               background: "transparent",
@@ -367,7 +375,7 @@ const Navigation = ({
                     className={`lw-nav-link ${isActive ? "active" : ""}`}
                     onClick={(e) => {
                       e.preventDefault();
-                      if (item.href) onNavigate(item.href);
+                      if (item.href) navigate(item.href);
                     }}
                   >
                     <span>{item.label}</span>
@@ -380,7 +388,9 @@ const Navigation = ({
                         style={{
                           opacity: 0.55,
                           transition: "transform 0.2s ease",
-                          transform: isActive ? "rotate(180deg)" : "rotate(0deg)",
+                          transform: isActive
+                            ? "rotate(180deg)"
+                            : "rotate(0deg)",
                         }}
                       >
                         <path
@@ -417,7 +427,7 @@ const Navigation = ({
                               className="lw-dropdown-link"
                               onClick={(e) => {
                                 e.preventDefault();
-                                onNavigate(child.href);
+                                navigate(child.href);
                                 setActiveDropdown(null);
                               }}
                             >
@@ -447,7 +457,7 @@ const Navigation = ({
             <button
               type="button"
               className="lw-contact-btn"
-              onClick={() => onNavigate("/contact-us")}
+              onClick={() => navigate("/contact-us")}
             >
               <Phone size={14} strokeWidth={2.5} />
               <span>Contact Us</span>
@@ -457,7 +467,7 @@ const Navigation = ({
             <button
               type="button"
               className="lw-cta-btn"
-              onClick={() => onNavigate("/get-started")}
+              onClick={() => navigate("/get-started")}
             >
               <UserCircle2 size={15} strokeWidth={2} />
               <span>Get Started</span>
@@ -545,8 +555,10 @@ const Navigation = ({
                   type="button"
                   className="lw-mobile-link"
                   onClick={() => {
-                    if (!hasChildren) { closeAll(); onNavigate(item.href || "/"); }
-                    else setOpenMobileSection(isExpanded ? null : index);
+                    if (!hasChildren) {
+                      closeAll();
+                      navigate(item.href || "/");
+                    } else setOpenMobileSection(isExpanded ? null : index);
                   }}
                 >
                   <span>{item.label}</span>
@@ -557,7 +569,9 @@ const Navigation = ({
                         color: "rgba(26,46,30,0.40)",
                         display: "inline-block",
                         transition: "transform 0.2s ease",
-                        transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                        transform: isExpanded
+                          ? "rotate(180deg)"
+                          : "rotate(0deg)",
                       }}
                     >
                       ▾
@@ -574,7 +588,14 @@ const Navigation = ({
                       transition={{ duration: 0.2 }}
                       style={{ overflow: "hidden" }}
                     >
-                      <div style={{ paddingBottom: "12px", display: "flex", flexDirection: "column", gap: "2px" }}>
+                      <div
+                        style={{
+                          paddingBottom: "12px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "2px",
+                        }}
+                      >
                         {item.children.map((child) => (
                           <a
                             key={child.label}
@@ -582,7 +603,7 @@ const Navigation = ({
                             className="lw-mobile-sublink"
                             onClick={(e) => {
                               e.preventDefault();
-                              onNavigate(child.href);
+                              navigate(child.href);
                               closeAll();
                             }}
                           >
@@ -599,11 +620,22 @@ const Navigation = ({
         </div>
 
         {/* Mobile auth — FIXED: Get Started → /login, Contact Us → /contact */}
-        <div style={{ marginTop: "auto", paddingTop: "24px", display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div
+          style={{
+            marginTop: "auto",
+            paddingTop: "24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+          }}
+        >
           <button
             type="button"
             className="lw-mobile-cta"
-            onClick={() => { closeAll(); onNavigate("/login"); }}
+            onClick={() => {
+              closeAll();
+              navigate("/login");
+            }}
           >
             <UserCircle2 size={17} strokeWidth={2} />
             <span>Get Started</span>
@@ -611,7 +643,10 @@ const Navigation = ({
           <button
             type="button"
             className="lw-mobile-secondary"
-            onClick={() => { closeAll(); onNavigate("/contact"); }}
+            onClick={() => {
+              closeAll();
+              navigate("/contact");
+            }}
           >
             <Phone size={15} strokeWidth={2.5} />
             <span>Contact Us</span>

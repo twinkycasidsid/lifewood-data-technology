@@ -12,129 +12,137 @@ import {
   PhilImpactPage,
   CareersPage,
   ContactUsPage,
-  InternalNewsPage,PrivacyPolicyPage,
+  InternalNewsPage,
+  PrivacyPolicyPage,
   CookiePolicyPage,
   TermsConditionsPage,
-} from '../pages'
-import { Hero, About, ImpactStats, ESG, Clients, CTA } from '../components/sections'
-import PrivacyPolicyPage from '../pages/PrivacyPolicyPage'
+} from "../pages";
+import {
+  Hero,
+  About,
+  ImpactStats,
+  ESG,
+  Clients,
+  CTA,
+} from "../components/sections";
+import PrivacyPolicyPage from "../pages/PrivacyPolicyPage";
 
 // Route configuration
 export const routeConfig = [
   {
-    path: '/ai-services',
+    path: "/ai-services",
     component: AIServicesPage,
     layout: true,
   },
   {
-    path: '/ai-projects',
+    path: "/ai-projects",
     component: AIProjectsPage,
     layout: true,
   },
   {
-    path: '/data-service',
+    path: "/data-service",
     component: DataServicePage,
     layout: true,
   },
   {
-    path: '/horizontal-llm-data',
+    path: "/horizontal-llm-data",
     component: HorizontalLLMDataPage,
     layout: true,
   },
   {
-    path: '/vertical-llm-data',
+    path: "/vertical-llm-data",
     component: VerticalLLMDataPage,
     layout: true,
   },
   {
-    path: '/aigc',
+    path: "/aigc",
     component: AIGCPage,
     layout: true,
   },
   {
-    path: '/about',
+    path: "/about",
     component: AboutPage,
     layout: true,
   },
   {
-    path: '/offices',
+    path: "/offices",
     component: OfficesPage,
     layout: true,
   },
   {
-    path: '/phil-impact',
+    path: "/phil-impact",
     component: PhilImpactPage,
     layout: true,
   },
   {
-    path: '/careers',
+    path: "/careers",
     component: CareersPage,
     layout: true,
   },
   {
-    path: '/contact-us',
+    path: "/contact-us",
     component: ContactUsPage,
     layout: true,
   },
   {
-    path: '/internal-news',
+    path: "/internal-news",
     component: InternalNewsPage,
     layout: true,
   },
   {
-    path: '/get-started',
+    path: "/get-started",
     component: GetStartedPage,
     layout: true,
   },
   {
-    path: '/sign-in',
+    path: "/sign-in",
     component: GetStartedPage,
     layout: true,
   },
   {
-    path: '/dashboard',
+    path: "/dashboard",
     component: DashboardPage,
     layout: false, // No nav/footer on dashboard
   },
   {
-    path: '/privacy-policy',
+    path: "/privacy-policy",
     component: PrivacyPolicyPage,
-    layout: false, // No nav/footer on privacy policy page
+    layout: true, // No nav/footer on privacy policy page
   },
   {
-    path: '/cookie-policy',
+    path: "/cookie-policy",
     component: CookiePolicyPage,
-    layout: false, // No nav/footer on cookie policy page
+    layout: true, // No nav/footer on cookie policy page
   },
-   {
-    path: '/terms-conditions',
+  {
+    path: "/terms-conditions",
     component: TermsConditionsPage,
-    layout: false, // No nav/footer on terms and conditions page
+    layout: true, // No nav/footer on terms and conditions page
   },
-]
+];
 
 /**
  * Get route config for a given path
  * Returns route config object or null if not found
  */
 export function getRouteConfig(path) {
-  return routeConfig.find((route) => route.path === path) || null
+  return routeConfig.find((route) => route.path === path) || null;
 }
 
 /**
  * Check if route should have nav/footer layout
  */
 export function shouldShowLayout(path) {
-  const route = getRouteConfig(path)
-  return route ? route.layout !== false : true
+  const route = getRouteConfig(path);
+  return route ? route.layout !== false : true;
 }
 
 /**
  * Get the component for a given path
  */
 export function getRouteComponent(path) {
-  const route = getRouteConfig(path)
-  return route ? route.component : null
+  const route = getRouteConfig(path);
+  return route ? route.component : null;
 }
 
 /**
@@ -147,4 +155,4 @@ export const homePageSections = [
   () => ({ component: ESG }),
   () => ({ component: TrustedBy }),
   () => ({ component: CTA }),
-]
+];

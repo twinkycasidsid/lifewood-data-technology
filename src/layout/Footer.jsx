@@ -1,8 +1,19 @@
-import { Link } from "react-router-dom";
-import { IconBrandLinkedin, IconBrandInstagram, IconBrandFacebook, IconBrandYoutube } from "@tabler/icons-react";
-import { FOOTER_LINKS, INTERNAL_LINKS, CONNECT_LINKS } from "../utils/constants";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  IconBrandLinkedin,
+  IconBrandInstagram,
+  IconBrandFacebook,
+  IconBrandYoutube,
+} from "@tabler/icons-react";
+import {
+  FOOTER_LINKS,
+  INTERNAL_LINKS,
+  CONNECT_LINKS,
+} from "../utils/constants";
 
-const Footer = ({ onNavigate = () => {} }) => {
+const Footer = () => {
+  const navigate = useNavigate();
+
   const footerLinks = FOOTER_LINKS;
   const internalLinks = INTERNAL_LINKS;
   const connectLinks = CONNECT_LINKS;
@@ -183,13 +194,10 @@ const Footer = ({ onNavigate = () => {} }) => {
               <button
                 type="button"
                 className="lw-footer-logo"
-                onClick={() => onNavigate("/")}
+                onClick={() => navigate("/")}
                 aria-label="Go to home page"
               >
-                <img
-                  src="lifewood-logo.png"
-                  alt="Lifewood"
-                />
+                <img src="lifewood-logo.png" alt="Lifewood" />
               </button>
 
               <p className="lw-footer-tagline">
@@ -245,13 +253,17 @@ const Footer = ({ onNavigate = () => {} }) => {
                 <ul>
                   {links.map((link, index) => (
                     <li key={index}>
-                      <Link
-                        to={category === "Connect" ? connectLinks[link] : internalLinks[link] || "#"}
-                        target={category === "Connect" ? "_blank" : undefined}
-                        rel={category === "Connect" ? "noopener noreferrer" : undefined}
-                      >
-                        {link}
-                      </Link>
+                      {category === "Connect" ? (
+                        <a
+                          href={connectLinks[link]}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {link}
+                        </a>
+                      ) : (
+                        <Link to={internalLinks[link] || "#"}>{link}</Link>
+                      )}
                     </li>
                   ))}
                 </ul>
