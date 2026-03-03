@@ -108,8 +108,8 @@ const ImpactStats = () => {
         .impact-section {
           position: relative;
           width: 100%;
-          padding: clamp(64px, 10vw, 128px) 0;
-          background: #fff;
+          padding: clamp(72px, 9vw, 120px) 0;
+          background: linear-gradient(180deg, #fbfdfc 0%, #f8fbf9 100%);
           overflow: hidden;
         }
 
@@ -125,7 +125,7 @@ const ImpactStats = () => {
         }
 
         .impact-inner {
-          max-width: 1440px;
+          max-width: 1280px;
           margin: 0 auto;
           padding: 0 clamp(24px, 6vw, 80px);
           position: relative;
@@ -134,7 +134,7 @@ const ImpactStats = () => {
 
         .impact-header {
           text-align: center;
-          margin-bottom: clamp(40px, 6vw, 72px);
+          margin-bottom: clamp(34px, 5vw, 64px);
         }
 
         .impact-eyebrow {

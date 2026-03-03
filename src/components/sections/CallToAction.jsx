@@ -9,7 +9,7 @@ const CTA = ({ onNavigate = () => {}, onSetAuthMode = () => {} }) => {
 
         .cta-section {
           position: relative;
-          padding: 120px 0;
+          padding: clamp(84px, 9vw, 112px) 0;
           overflow: hidden;
           background: #133020;
         }

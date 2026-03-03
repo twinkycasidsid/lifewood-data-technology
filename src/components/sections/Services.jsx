@@ -257,12 +257,14 @@ const Services = () => {
       <section
         className="services-section"
         style={{
-          padding: 'clamp(64px, 10vw, 128px) clamp(24px, 6vw, 80px)',
-          background: '#f4f7f5',
+          padding: 'clamp(72px, 9vw, 116px) clamp(24px, 6vw, 80px)',
+          background: 'linear-gradient(180deg, #f8fbf9 0%, #f2f7f4 100%)',
           fontFamily: "'Manrope', 'Segoe UI', sans-serif",
+          borderTop: '1px solid rgba(4, 98, 65, 0.08)',
+          borderBottom: '1px solid rgba(4, 98, 65, 0.08)',
         }}
       >
-        <div style={{ maxWidth: 1440, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
 
           {/* Header */}
           <div style={{ textAlign: 'center', maxWidth: 820, margin: '0 auto clamp(40px,7vw,80px)' }}>

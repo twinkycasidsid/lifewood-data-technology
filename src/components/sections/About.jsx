@@ -53,9 +53,10 @@ const About = ({ onNavigate = () => {} }) => {
         .lw-about {
           position: relative;
           width: 100%;
-          padding: clamp(64px, 10vw, 128px) 0;
-          background: #fff;
+          padding: clamp(76px, 9vw, 132px) 0 clamp(68px, 8vw, 112px);
+          background: linear-gradient(180deg, #ffffff 0%, #fbfdfc 100%);
           overflow: hidden;
+          border-bottom: 1px solid rgba(4, 98, 65, 0.08);
         }
 
         /* Subtle skewed background accent */
@@ -71,7 +72,7 @@ const About = ({ onNavigate = () => {} }) => {
 
         /* ── Container ── */
         .lw-about-container {
-          max-width: 1440px;
+          max-width: 1280px;
           margin: 0 auto;
           padding: 0 clamp(24px, 6vw, 80px);
         }

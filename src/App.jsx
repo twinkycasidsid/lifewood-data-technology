@@ -29,9 +29,7 @@ import {
   Hero,
   About,
   ImpactStats,
-  Capabilities,
   ESG,
-  GlobalPresence,
   CTA,
 } from "./components/sections";
 import TrustedBy from "./components/sections/TrustedBy";
@@ -71,87 +69,56 @@ function AppContent() {
     <div className="app">
       <Navigation onSetAuthMode={setAuthMode} />
 
-      <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
-          {" "}
-          <Route
-            path="/"
-            element={
-              <>
-                <Hero onNavigate={navigateTo} />
-                <About />
-                <ImpactStats />
-                <Capabilities />
-                <ESG />
-                <GlobalPresence />
-                <CTA />
-              </>
-            }
-          />
-          <Route path="/ai-services" element={<AIServicesPage />} />
-          <Route path="/ai-projects" element={<AIProjectsPage />} />
-          <Route path="/data-service" element={<DataServicePage />} />
-          <Route
-            path="/horizontal-llm-data"
-            element={<HorizontalLLMDataPage />}
-          />
-          <Route path="/vertical-llm-data" element={<VerticalLLMDataPage />} />
-          <Route path="/aigc" element={<AIGCPage />} />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/offices" element={<OfficesPage />} />
-          <Route path="/phil-impact" element={<PhilImpactPage />} />
-          <Route path="/careers" element={<CareersPage />} />
-          <Route path="/contact-us" element={<ContactUsPage />} />
-          <Route path="/internal-news" element={<InternalNewsPage />} />
-          <Route
-            path="/get-started"
-            element={
-              <GetStartedPage
-                authMode={authMode}
-                onAuthModeChange={setAuthMode}
-              />
-            }
-          />
-          <Route
-            path="/sign-in"
-            element={
-              <GetStartedPage
-                authMode="signin"
-                onAuthModeChange={setAuthMode}
-              />
-            }
-          />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route
-            path="/privacy-policy"
-            element={
-              <PageLayout>
-                <PrivacyPolicyPage />
-              </PageLayout>
-            }
-          />{" "}
-          <Route
-            path="/cookie-policy"
-            element={
-              <PageLayout>
-                <CookiePolicyPage />
-              </PageLayout>
-            }
-          />
-          <Route
-            path="/terms-conditions"
-            element={
-              <PageLayout>
-                <TermsConditionsPage />
-              </PageLayout>
-            }
-          />{" "}
-          <Route path="/cookie-policy" element={<CookiePolicyPage />} />
-          <Route path="/terms-conditions" element={<TermsConditionsPage />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </AnimatePresence>
-
+      <Routes>
+        {" "}
+        <Route
+          path="/"
+          element={
+            <PageLayout>
+              <Hero />
+              <About />
+              <ImpactStats />
+              <ESG />
+              <CTA />
+            </PageLayout>
+          }
+        />
+        <Route path="/ai-services" element={<AIServicesPage />} />
+        <Route path="/ai-projects" element={<AIProjectsPage />} />
+        <Route path="/data-service" element={<DataServicePage />} />
+        <Route
+          path="/horizontal-llm-data"
+          element={<HorizontalLLMDataPage />}
+        />
+        <Route path="/vertical-llm-data" element={<VerticalLLMDataPage />} />
+        <Route path="/aigc" element={<AIGCPage />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/offices" element={<OfficesPage />} />
+        <Route path="/phil-impact" element={<PhilImpactPage />} />
+        <Route path="/careers" element={<CareersPage />} />
+        <Route path="/contact-us" element={<ContactUsPage />} />
+        <Route path="/internal-news" element={<InternalNewsPage />} />
+        <Route
+          path="/get-started"
+          element={
+            <GetStartedPage
+              authMode={authMode}
+              onAuthModeChange={setAuthMode}
+            />
+          }
+        />
+        <Route
+          path="/sign-in"
+          element={
+            <GetStartedPage authMode="signin" onAuthModeChange={setAuthMode} />
+          }
+        />
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+        <Route path="/cookie-policy" element={<CookiePolicyPage />} />
+        <Route path="/terms-conditions" element={<TermsConditionsPage />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
       <Footer />
       <Chatbot />
     </div>

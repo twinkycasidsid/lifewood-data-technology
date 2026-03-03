@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Cookie, Shield, Settings, Eye, BarChart2, Target, Users, Mail, ChevronRight } from "lucide-react";
 
@@ -78,6 +79,37 @@ const sections = [
 ];
 
 const CookiePolicyPage = ({ onNavigate = () => {} }) => {
+  const [activeSection, setActiveSection] = useState(sections[0].number);
+
+  const scrollToSection = (number) => {
+    const target = document.getElementById(`cp-section-${number}`);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveSection(number);
+    }
+  };
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const number = entry.target.getAttribute("data-section-number");
+            if (number) setActiveSection(number);
+          }
+        });
+      },
+      { rootMargin: "-18% 0px -70% 0px", threshold: 0.12 }
+    );
+
+    sections.forEach((section) => {
+      const element = document.getElementById(`cp-section-${section.number}`);
+      if (element) observer.observe(element);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <>
       <style>{`
@@ -98,38 +130,38 @@ const CookiePolicyPage = ({ onNavigate = () => {} }) => {
           padding: 60px 40px 52px;
           text-align: center;
           overflow: hidden;
-          background: #fff;
-          border-bottom: 1px solid rgba(26,46,30,0.07);
+          background: linear-gradient(135deg, rgba(10,22,14,0.94) 0%, rgba(13,34,24,0.94) 58%, rgba(4,98,65,0.86) 100%);
+          border-bottom: 1px solid rgba(255,255,255,0.08);
         }
         .cp-hero::before {
           content: "";
           position: absolute; inset: 0;
           background:
-            radial-gradient(ellipse 65% 55% at 50% 0%, rgba(4,98,65,0.055) 0%, transparent 70%),
-            radial-gradient(ellipse 35% 35% at 85% 85%, rgba(232,160,32,0.045) 0%, transparent 60%);
+            radial-gradient(circle at 12% 14%, rgba(232,160,32,0.14), transparent 46%),
+            radial-gradient(circle at 88% 84%, rgba(255,255,255,0.08), transparent 44%);
           pointer-events: none;
         }
         .cp-hero-eyebrow {
           display: inline-flex; align-items: center; gap: 7px;
-          background: rgba(4,98,65,0.07);
-          border: 1px solid rgba(4,98,65,0.15);
+          background: rgba(255,255,255,0.08);
+          border: 1px solid rgba(255,255,255,0.16);
           border-radius: 999px; padding: 5px 14px;
           font-size: 11px; font-weight: 700; letter-spacing: 0.11em;
-          text-transform: uppercase; color: #046241;
+          text-transform: uppercase; color: #f4f6f2;
           margin-bottom: 20px; font-family: 'Manrope', sans-serif;
           position: relative; z-index: 1;
         }
         .cp-hero-title {
           font-family: 'Manrope', sans-serif;
           font-size: clamp(32px, 5.5vw, 62px);
-          font-weight: 800; line-height: 1.1;
-          letter-spacing: -0.03em; color: #1a2e1e;
+          font-weight: 800; line-height: 1.08;
+          letter-spacing: -0.03em; color: #f8faf6;
           margin: 0 0 16px; position: relative; z-index: 1;
         }
         .cp-hero-title span { color: #E8A020; }
         .cp-hero-sub {
           font-size: clamp(13px, 1.6vw, 15px);
-          color: rgba(26,46,30,0.50); max-width: 480px;
+          color: rgba(246,247,244,0.82); max-width: 480px;
           margin: 0 auto; line-height: 1.65; font-weight: 400;
           font-family: 'Manrope', sans-serif;
           position: relative; z-index: 1;
@@ -142,15 +174,73 @@ const CookiePolicyPage = ({ onNavigate = () => {} }) => {
         .cp-hero-meta-item {
           display: flex; align-items: center; gap: 6px;
           font-size: 11.5px; font-weight: 600;
-          color: rgba(26,46,30,0.38); font-family: 'Manrope', sans-serif;
+          color: rgba(246,247,244,0.72); font-family: 'Manrope', sans-serif;
         }
-        .cp-hero-meta-dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(26,46,30,0.18); }
+        .cp-hero-meta-dot { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.45); }
+
+        .cp-layout {
+          max-width: 1240px;
+          margin: 0 auto;
+          padding: 0 28px 90px;
+          display: grid;
+          grid-template-columns: 280px minmax(0, 1fr);
+          gap: 0 26px;
+          align-items: start;
+        }
+
+        .cp-toc {
+          position: sticky;
+          top: 96px;
+          align-self: start;
+          padding: 28px 14px 20px 0;
+          border-right: 1px solid rgba(26,46,30,0.12);
+          max-height: calc(100vh - 110px);
+          overflow: auto;
+        }
+        .cp-toc-label {
+          font-size: 10px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: rgba(26,46,30,0.52);
+          margin-bottom: 14px;
+          font-weight: 700;
+        }
+        .cp-toc-row {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .cp-toc-item {
+          border: none;
+          background: none;
+          text-align: left;
+          font-family: 'Manrope', sans-serif;
+          font-size: 12.5px;
+          font-weight: 600;
+          color: rgba(26,46,30,0.60);
+          padding: 8px 12px;
+          cursor: pointer;
+          border-left: 2px solid transparent;
+          border-radius: 0 8px 8px 0;
+          transition: color 0.18s ease, background 0.18s ease;
+        }
+        .cp-toc-item:hover {
+          color: #1a2e1e;
+          background: rgba(4,98,65,0.06);
+        }
+        .cp-toc-item.active {
+          color: #1a2e1e;
+          border-left-color: #e8a020;
+          background: rgba(4,98,65,0.08);
+        }
+        .cp-main {
+          min-width: 0;
+        }
 
         /* ── Body ── */
         .cp-body {
-          max-width: 800px;
-          margin: 0 auto;
-          padding: 48px 28px 96px;
+          margin: 0;
+          padding: 28px 0 0;
           display: flex;
           flex-direction: column;
           gap: 16px;
@@ -165,6 +255,7 @@ const CookiePolicyPage = ({ onNavigate = () => {} }) => {
           transition: border-color 0.2s ease, box-shadow 0.2s ease;
           overflow: hidden;
           position: relative;
+          scroll-margin-top: 100px;
         }
         .cp-card:hover {
           border-color: rgba(4,98,65,0.18);
@@ -269,10 +360,47 @@ const CookiePolicyPage = ({ onNavigate = () => {} }) => {
         @media (max-width: 700px) {
           .cp-root { padding-top: 64px; }
           .cp-hero { padding: 44px 20px 40px; }
-          .cp-body { padding: 28px 14px 64px; gap: 12px; }
+          .cp-body { padding: 20px 0 0; gap: 12px; }
           .cp-card { padding: 22px 20px; }
           .cp-section-header { gap: 12px; }
           .cp-hero-meta { gap: 14px; }
+        }
+
+        @media (max-width: 1024px) {
+          .cp-layout {
+            grid-template-columns: 1fr;
+            padding: 0 14px 64px;
+          }
+          .cp-toc {
+            top: 72px;
+            z-index: 20;
+            border-right: none;
+            border-bottom: 1px solid rgba(26,46,30,0.12);
+            padding: 12px 0 10px;
+            margin: 0 0 10px;
+            background: rgba(249,249,247,0.95);
+            backdrop-filter: blur(8px);
+            max-height: none;
+            overflow: visible;
+          }
+          .cp-toc-row {
+            flex-direction: row;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 2px;
+          }
+          .cp-toc-item {
+            white-space: nowrap;
+            border-left: none;
+            border-bottom: 2px solid transparent;
+            border-radius: 999px;
+            border: 1px solid rgba(26,46,30,0.10);
+            background: #fff;
+          }
+          .cp-toc-item.active {
+            border-left: 1px solid rgba(26,46,30,0.10);
+            border-bottom-color: #e8a020;
+          }
         }
       `}</style>
 
@@ -304,19 +432,40 @@ const CookiePolicyPage = ({ onNavigate = () => {} }) => {
           </div>
         </motion.div>
 
-        {/* ── Sections ── */}
-        <div className="cp-body">
-          {sections.map((section, i) => {
-            const Icon = section.icon;
-            return (
-              <motion.div
-                key={section.number}
-                className="cp-card"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-40px" }}
-                transition={{ duration: 0.5, delay: i * 0.05, ease: [0.22, 1, 0.36, 1] }}
-              >
+        <div className="cp-layout">
+          <aside className="cp-toc">
+            <p className="cp-toc-label">On this page</p>
+            <div className="cp-toc-row">
+              {sections.map((section) => (
+                <button
+                  key={`cp-toc-${section.number}`}
+                  type="button"
+                  className={`cp-toc-item${activeSection === section.number ? " active" : ""}`}
+                  onClick={() => scrollToSection(section.number)}
+                >
+                  {section.number}. {section.title}
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <main className="cp-main">
+            {/* ── Sections ── */}
+            <div className="cp-body">
+              {sections.map((section, i) => {
+                const Icon = section.icon;
+                return (
+                  <motion.div
+                    key={section.number}
+                    id={`cp-section-${section.number}`}
+                    data-section-number={section.number}
+                    className="cp-card"
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-40px" }}
+                    transition={{ duration: 0.5, delay: i * 0.05, ease: [0.22, 1, 0.36, 1] }}
+                    onMouseEnter={() => setActiveSection(section.number)}
+                  >
                 {/* Ghost number */}
                 <div className="cp-ghost">{section.number}</div>
 
@@ -373,9 +522,11 @@ const CookiePolicyPage = ({ onNavigate = () => {} }) => {
                     <ChevronRight size={13} strokeWidth={2.5} style={{ marginLeft: 2 }} />
                   </a>
                 )}
-              </motion.div>
-            );
-          })}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </main>
         </div>
       </div>
     </>

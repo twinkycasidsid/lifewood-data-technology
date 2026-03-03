@@ -49,6 +49,9 @@ export const INTERNAL_LINKS = {
   "Philanthropy & Impact": "/phil-impact",
   Careers: "/careers",
   "Contact Us": "/contact-us",
+  "Privacy Policy": "/privacy-policy",
+  "Cookie Policy": "/cookie-policy",
+  "Terms and Conditions": "/terms-conditions",
 };
 
 // Social media links for footer

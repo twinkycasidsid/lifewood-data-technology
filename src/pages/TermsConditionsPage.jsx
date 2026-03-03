@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const sections = [
   {
@@ -182,108 +182,134 @@ const sections = [
 ];
 
 const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Source+Serif+4:ital,wght@0,300;0,400;1,300&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   .tnc-root {
     min-height: 100vh;
-    background-color: #F7F4EF;
-    font-family: 'Source Serif 4', Georgia, serif;
-    color: #1C1A17;
+    background: #f9f9f7;
+    font-family: 'Manrope', sans-serif;
+    color: #1a2e1e;
+    padding-top: 80px;
   }
 
   .tnc-header {
-    background-color: #1C1A17;
-    color: #F7F4EF;
-    padding: 60px 0 50px;
+    background: linear-gradient(135deg, rgba(10,22,14,0.94) 0%, rgba(13,34,24,0.94) 58%, rgba(4,98,65,0.86) 100%);
+    color: #f8faf6;
+    padding: 60px 40px 52px;
+    text-align: center;
     position: relative;
     overflow: hidden;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
   }
 
   .tnc-header::before {
     content: '';
     position: absolute;
-    top: -40px; right: -40px;
-    width: 300px; height: 300px;
-    border: 1px solid rgba(247,244,239,0.1);
-    border-radius: 50%;
-  }
-
-  .tnc-header::after {
-    content: '';
-    position: absolute;
-    bottom: -60px; left: 60px;
-    width: 200px; height: 200px;
-    border: 1px solid rgba(247,244,239,0.07);
-    border-radius: 50%;
+    inset: 0;
+    background:
+      radial-gradient(circle at 12% 14%, rgba(232,160,32,0.12), transparent 46%),
+      radial-gradient(circle at 88% 84%, rgba(255,255,255,0.08), transparent 44%);
+    pointer-events: none;
   }
 
   .tnc-header-inner {
-    max-width: 860px;
+    max-width: none;
     margin: 0 auto;
-    padding: 0 40px;
+    padding: 0;
     position: relative;
     z-index: 1;
   }
 
   .tnc-eyebrow {
-    font-family: 'Source Serif 4', serif;
-    font-weight: 300;
-    font-size: 11px;
-    letter-spacing: 0.25em;
-    text-transform: uppercase;
-    color: #C4A882;
-    margin-bottom: 18px;
-  }
-
-  .tnc-title {
-    font-family: 'Playfair Display', serif;
-    font-size: clamp(36px, 5vw, 58px);
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 999px;
+    padding: 5px 14px;
     font-weight: 700;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
+    font-size: 11px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: #f4f6f2;
     margin-bottom: 20px;
   }
 
-  .tnc-subtitle {
-    font-size: 15px;
-    font-weight: 300;
-    font-style: italic;
-    color: rgba(247,244,239,0.6);
-    line-height: 1.6;
+  .tnc-title {
+    font-size: clamp(32px, 5.5vw, 62px);
+    font-weight: 800;
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+    margin-bottom: 16px;
   }
 
-  .tnc-divider-line {
-    height: 1px;
-    background: linear-gradient(90deg, #C4A882, transparent);
-    margin: 24px 0 0;
+  .tnc-subtitle {
+    font-size: clamp(13px, 1.6vw, 15px);
+    font-weight: 400;
+    color: rgba(246,247,244,0.82);
+    line-height: 1.65;
+    max-width: 520px;
+    margin: 0 auto;
+  }
+
+  .tnc-header-meta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 28px;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 1;
+  }
+
+  .tnc-header-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: rgba(246,247,244,0.72);
+    font-family: 'Manrope', sans-serif;
+  }
+
+  .tnc-header-meta-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.45);
   }
 
   .tnc-layout {
-    max-width: 860px;
+    max-width: 1240px;
     margin: 0 auto;
-    padding: 0 40px;
+    padding: 0 32px;
     display: grid;
-    grid-template-columns: 220px 1fr;
-    gap: 0;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 0 34px;
     align-items: start;
   }
 
   .tnc-nav {
     position: sticky;
-    top: 32px;
-    padding: 40px 24px 40px 0;
-    border-right: 1px solid #E0D9CE;
+    top: 96px;
+    align-self: start;
+    padding: 30px 14px 24px 0;
+    border-right: 1px solid rgba(26,46,30,0.12);
+    max-height: calc(100vh - 110px);
+    overflow: auto;
   }
 
   .tnc-nav-label {
     font-size: 10px;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: #9A9080;
-    margin-bottom: 16px;
-    font-weight: 300;
+    color: rgba(26,46,30,0.52);
+    margin-bottom: 14px;
+    font-weight: 700;
   }
 
   .tnc-nav-item {
@@ -293,38 +319,43 @@ const styles = `
     border: none;
     text-align: left;
     cursor: pointer;
-    padding: 7px 0;
-    font-family: 'Source Serif 4', serif;
-    font-size: 13px;
-    font-weight: 300;
-    color: #6B6358;
-    transition: color 0.2s;
-    line-height: 1.3;
+    padding: 8px 12px;
+    font-family: 'Manrope', sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: rgba(26,46,30,0.60);
+    transition: color 0.18s ease, background 0.18s ease;
+    line-height: 1.35;
     border-left: 2px solid transparent;
-    padding-left: 12px;
-    margin-left: -12px;
+    border-radius: 0 8px 8px 0;
   }
 
   .tnc-nav-item:hover {
-    color: #1C1A17;
+    color: #1a2e1e;
+    background: rgba(4,98,65,0.06);
   }
 
   .tnc-nav-item.active {
-    color: #1C1A17;
-    border-left-color: #C4A882;
-    font-weight: 400;
+    color: #1a2e1e;
+    border-left-color: #e8a020;
+    background: rgba(4,98,65,0.08);
   }
 
   .tnc-content {
-    padding: 48px 0 80px 48px;
+    padding: 30px 0 82px;
   }
 
   .tnc-section {
-    margin-bottom: 52px;
-    scroll-margin-top: 32px;
+    margin-bottom: 34px;
+    scroll-margin-top: 100px;
+    background: #fff;
+    border: 1px solid rgba(26,46,30,0.09);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 2px 14px rgba(26,46,30,0.04);
     opacity: 0;
     transform: translateY(12px);
-    animation: fadeUp 0.5s forwards;
+    animation: fadeUp 0.45s forwards;
   }
 
   @keyframes fadeUp {
@@ -334,101 +365,137 @@ const styles = `
   .tnc-section-header {
     display: flex;
     align-items: baseline;
-    gap: 16px;
-    margin-bottom: 20px;
-    padding-bottom: 14px;
-    border-bottom: 1px solid #E0D9CE;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(26,46,30,0.12);
   }
 
   .tnc-section-num {
-    font-family: 'Playfair Display', serif;
-    font-size: 13px;
-    color: #C4A882;
-    font-weight: 600;
-    min-width: 20px;
+    font-size: 12px;
+    color: #e8a020;
+    font-weight: 700;
+    min-width: 18px;
   }
 
   .tnc-section-title {
-    font-family: 'Playfair Display', serif;
     font-size: 20px;
-    font-weight: 600;
-    color: #1C1A17;
-    line-height: 1.25;
+    font-weight: 800;
+    color: #1a2e1e;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
   }
 
   .tnc-clause {
-    margin-bottom: 16px;
+    margin-bottom: 14px;
     display: flex;
-    gap: 14px;
+    gap: 12px;
   }
 
   .tnc-clause-id {
     font-size: 12px;
-    color: #C4A882;
+    color: rgba(4,98,65,0.9);
     min-width: 30px;
     padding-top: 2px;
-    font-weight: 300;
-    letter-spacing: 0.03em;
+    font-weight: 700;
   }
 
   .tnc-clause-text {
-    font-size: 14.5px;
-    line-height: 1.75;
-    color: #3A3530;
-    font-weight: 300;
+    font-size: 14px;
+    line-height: 1.72;
+    color: rgba(26,46,30,0.72);
+    font-weight: 500;
   }
 
   .tnc-sub-items {
-    margin-top: 12px;
-    border-left: 2px solid #E0D9CE;
-    padding-left: 16px;
+    margin-top: 10px;
+    border-left: 2px solid rgba(26,46,30,0.12);
+    padding-left: 14px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
 
   .tnc-sub-item {
     display: flex;
-    gap: 10px;
+    gap: 9px;
   }
 
   .tnc-sub-id {
     font-size: 12px;
-    color: #9A9080;
+    color: rgba(26,46,30,0.54);
     min-width: 22px;
     padding-top: 1px;
+    font-weight: 600;
   }
 
   .tnc-sub-text {
-    font-size: 13.5px;
-    line-height: 1.7;
-    color: #4A4540;
-    font-weight: 300;
+    font-size: 13px;
+    line-height: 1.65;
+    color: rgba(26,46,30,0.66);
+    font-weight: 500;
   }
 
   .tnc-footer {
-    background-color: #1C1A17;
-    color: rgba(247,244,239,0.5);
-    padding: 32px 40px;
+    background: #0f2217;
+    color: rgba(246,247,244,0.58);
+    padding: 28px 32px;
     text-align: center;
     font-size: 12px;
-    font-weight: 300;
-    letter-spacing: 0.05em;
+    font-weight: 500;
+    letter-spacing: 0.03em;
   }
 
   .tnc-footer a {
-    color: #C4A882;
+    color: #e8a020;
     text-decoration: none;
   }
 
-  @media (max-width: 700px) {
+  @media (max-width: 1024px) {
     .tnc-layout {
       grid-template-columns: 1fr;
       padding: 0 20px;
     }
-    .tnc-nav { display: none; }
-    .tnc-content { padding: 32px 0 60px; }
-    .tnc-header-inner { padding: 0 20px; }
+    .tnc-nav {
+      top: 72px;
+      z-index: 20;
+      border-right: none;
+      border-bottom: 1px solid rgba(26,46,30,0.12);
+      padding: 10px 0 10px;
+      margin: 0 0 12px;
+      background: rgba(249,249,247,0.95);
+      backdrop-filter: blur(8px);
+      max-height: none;
+      overflow: visible;
+    }
+    .tnc-nav-label { margin-bottom: 8px; }
+    .tnc-nav-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .tnc-nav-item {
+      width: auto;
+      white-space: nowrap;
+      border-left: none;
+      border-bottom: 2px solid transparent;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid rgba(26,46,30,0.10);
+      padding: 8px 12px;
+    }
+    .tnc-nav-item.active {
+      border-left: 1px solid rgba(26,46,30,0.10);
+      border-bottom-color: #e8a020;
+    }
+    .tnc-content { padding: 16px 0 56px; }
+    .tnc-section { padding: 18px; }
+  }
+
+  @media (max-width: 700px) {
+    .tnc-header { padding: 44px 20px 40px; }
+    .tnc-header-meta { gap: 14px; }
   }
 `;
 
@@ -443,33 +510,65 @@ export default function TermsAndConditions() {
     }
   };
 
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const id = Number(entry.target.getAttribute("data-section-id"));
+            if (!Number.isNaN(id)) setActiveSection(id);
+          }
+        });
+      },
+      { rootMargin: "-20% 0px -65% 0px", threshold: 0.12 }
+    );
+
+    sections.forEach((section) => {
+      const element = document.getElementById(`section-${section.id}`);
+      if (element) observer.observe(element);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <>
       <style>{styles}</style>
       <div className="tnc-root">
         <header className="tnc-header">
           <div className="tnc-header-inner">
-            <p className="tnc-eyebrow">Lifewood Data Technology Limited</p>
+            <p className="tnc-eyebrow">Legal</p>
             <h1 className="tnc-title">Terms &amp;<br />Conditions</h1>
             <p className="tnc-subtitle">
               Please read these terms carefully before using lifewood.com
             </p>
-            <div className="tnc-divider-line" />
+            <div className="tnc-header-meta">
+              <span className="tnc-header-meta-item">Lifewood Data Technology Ltd.</span>
+              <span className="tnc-header-meta-dot" />
+              <span className="tnc-header-meta-item">18 sections</span>
+              <span className="tnc-header-meta-dot" />
+              <span className="tnc-header-meta-item">Effective 3 November 2025</span>
+              <span className="tnc-header-meta-dot" />
+              <span className="tnc-header-meta-item">Hong Kong (Cap. 486)</span>
+            </div>
           </div>
         </header>
 
         <div className="tnc-layout">
           <nav className="tnc-nav">
             <p className="tnc-nav-label">Sections</p>
-            {sections.map((s) => (
-              <button
-                key={s.id}
-                className={`tnc-nav-item${activeSection === s.id ? " active" : ""}`}
-                onClick={() => scrollTo(s.id)}
-              >
-                {s.id}. {s.title}
-              </button>
-            ))}
+            <div className="tnc-nav-row">
+              {sections.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`tnc-nav-item${activeSection === s.id ? " active" : ""}`}
+                  onClick={() => scrollTo(s.id)}
+                >
+                  {s.id}. {s.title}
+                </button>
+              ))}
+            </div>
           </nav>
 
           <main className="tnc-content">
@@ -477,6 +576,7 @@ export default function TermsAndConditions() {
               <section
                 key={section.id}
                 id={`section-${section.id}`}
+                data-section-id={section.id}
                 className="tnc-section"
                 style={{ animationDelay: `${i * 0.04}s` }}
                 onMouseEnter={() => setActiveSection(section.id)}
@@ -508,11 +608,6 @@ export default function TermsAndConditions() {
             ))}
           </main>
         </div>
-
-        <footer className="tnc-footer">
-          &copy; Lifewood Data Technology Limited &mdash; Unit 19, 9/F, Core C, Cyberport 3, 100 Cyberport Road, Hong Kong &mdash;{" "}
-          <a href="mailto:hr@lifewood.com">hr@lifewood.com</a>
-        </footer>
       </div>
     </>
   );
