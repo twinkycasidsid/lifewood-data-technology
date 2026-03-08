@@ -5,6 +5,7 @@ import { Navigation, Footer } from "./layout";
 import { useNavigate, useLocation } from "react-router-dom";
 import NotFound from "./pages/NotFound";
 import PageLayout from "./layout/PageLayout";
+import { getSectionTheme } from "./utils/sectionTheme";
 
 import {
   GetStartedPage,
@@ -57,6 +58,7 @@ function AppContent() {
     </motion.div>
   );
   const location = useLocation();
+  const sectionTheme = getSectionTheme(location.pathname);
   const [authMode, setAuthMode] = useState("signup");
   const navigate = useNavigate();
 
@@ -66,7 +68,7 @@ function AppContent() {
   };
 
   return (
-    <div className="app">
+    <div className={`app section-theme section-${sectionTheme}`}>
       <Navigation onSetAuthMode={setAuthMode} />
 
       <Routes>

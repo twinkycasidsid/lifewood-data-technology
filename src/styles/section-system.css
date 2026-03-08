@@ -1,0 +1,136 @@
+.app {
+  --section-accent: #ffb347;
+  --section-soft: rgba(255, 179, 71, 0.1);
+  --section-grad-a: #133020;
+  --section-grad-b: #046241;
+  --section-grad-c: #133020;
+}
+
+.section-home {
+  --section-accent: #ffb347;
+  --section-soft: rgba(255, 179, 71, 0.1);
+  --section-grad-a: #133020;
+  --section-grad-b: #046241;
+  --section-grad-c: #133020;
+}
+
+.section-company {
+  --section-accent: #046241;
+  --section-soft: rgba(4, 98, 65, 0.1);
+  --section-grad-a: #133020;
+  --section-grad-b: #046241;
+  --section-grad-c: #133020;
+}
+
+.section-ai {
+  --section-accent: #ffc370;
+  --section-soft: rgba(255, 195, 112, 0.16);
+  --section-grad-a: #133020;
+  --section-grad-b: #046241;
+  --section-grad-c: #133020;
+}
+
+.section-offer {
+  --section-accent: #046241;
+  --section-soft: rgba(4, 98, 65, 0.10);
+  --section-grad-a: #133020;
+  --section-grad-b: #046241;
+  --section-grad-c: #133020;
+}
+
+.section-careers {
+  --section-accent: #ffb347;
+  --section-soft: rgba(255, 179, 71, 0.12);
+  --section-grad-a: #133020;
+  --section-grad-b: #046241;
+  --section-grad-c: #133020;
+}
+
+.section-legal {
+  --section-accent: #ffb347;
+  --section-soft: rgba(255, 179, 71, 0.1);
+  --section-grad-a: #133020;
+  --section-grad-b: #046241;
+  --section-grad-c: #133020;
+}
+
+.section-company .about-page,
+.section-company .lw-offices,
+.section-company .lw-news,
+.section-company .phil-page {
+  background-image: linear-gradient(180deg, #ffffff 0%, #f5eedb 100%);
+}
+
+.section-ai .ai-svc-page,
+.section-ai .ap-page {
+  background-image: linear-gradient(180deg, #ffffff 0%, #f5eedb 100%);
+}
+
+.section-offer .ds-page,
+.section-offer .hlld-page,
+.section-offer .vlld-page,
+.section-offer .aigc-page {
+  background-image: linear-gradient(180deg, #ffffff 0%, #f5eedb 100%);
+}
+
+.section-careers .careers-page {
+  background-image: linear-gradient(180deg, #ffffff 0%, #f5eedb 100%) !important;
+}
+
+.section-company .lw-offices-hero,
+.section-company .lw-news-hero,
+.section-company .phil-hero-section,
+.section-company .ai-page-hero,
+.section-ai .ap-hero,
+.section-offer .ds-hero,
+.section-offer .hlld-hero,
+.section-offer .vlld-hero,
+.section-offer .aigc-hero,
+.section-careers .cp-hero,
+.section-legal .pp-hero,
+.section-legal .cp-hero,
+.section-legal .tnc-header {
+  border-top: 2px solid color-mix(in srgb, var(--section-accent) 60%, transparent);
+}
+
+.section-company .lw-eyebrow-line,
+.section-company .lw-news-eyebrow-line,
+.section-company .phil-eyebrow-line,
+.section-ai .ap-eyebrow-line {
+  background: var(--section-accent) !important;
+}
+
+.section-company .lw-eyebrow,
+.section-company .lw-news-eyebrow,
+.section-company .phil-eyebrow,
+.section-ai .ap-eyebrow {
+  color: color-mix(in srgb, var(--section-accent) 88%, #ffffff) !important;
+}
+
+.section-legal .pp-layout,
+.section-legal .cp-layout,
+.section-legal .tnc-layout {
+  max-width: 1240px;
+}
+
+.section-legal .pp-toc,
+.section-legal .cp-toc,
+.section-legal .tnc-nav {
+  border-right-color: rgba(26, 46, 30, 0.12);
+}
+
+.section-legal .pp-toc-item.active,
+.section-legal .cp-toc-item.active,
+.section-legal .tnc-nav-item.active {
+  border-left-color: #ffb347;
+  background: rgba(4, 98, 65, 0.08);
+}
+
+@media (max-width: 1024px) {
+.section-legal .pp-toc-item.active,
+.section-legal .cp-toc-item.active,
+.section-legal .tnc-nav-item.active {
+    border-left-color: rgba(26, 46, 30, 0.1);
+    border-bottom-color: #ffb347;
+  }
+}

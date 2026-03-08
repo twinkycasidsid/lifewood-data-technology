@@ -1,0 +1,162 @@
+:root {
+  --lw-castleton-green: #046241;
+  --lw-dark-serpent: #133020;
+  --lw-saffaron: #ffb347;
+  --lw-earth-yellow: #ffc370;
+  --lw-paper: #f5eedb;
+  --lw-white: #ffffff;
+}
+
+html,
+body,
+#root,
+.app {
+  font-family: "Manrope", sans-serif !important;
+  background: var(--lw-white);
+  color: var(--lw-dark-serpent);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+span,
+li,
+a,
+button,
+input,
+textarea,
+select,
+label,
+small {
+  font-family: "Manrope", sans-serif !important;
+}
+
+main,
+section {
+  background-color: transparent;
+}
+
+.app .btn-primary,
+.app .btn-ignite,
+.app .gs-submit,
+.app .nav-start-btn,
+.app .lw-cta-btn,
+.app .lw-mobile-cta {
+  background: var(--lw-saffaron) !important;
+  color: var(--lw-dark-serpent) !important;
+}
+
+.app .btn-primary:hover,
+.app .btn-ignite:hover,
+.app .gs-submit:hover,
+.app .lw-cta-btn:hover,
+.app .lw-mobile-cta:hover {
+  background: var(--lw-earth-yellow) !important;
+}
+
+.app .btn-secondary,
+.app .btn-edge,
+.app .lw-contact-btn {
+  border-color: rgba(255, 255, 255, 0.35) !important;
+}
+
+.app .hero,
+.app .cta-section,
+.app .lw-footer,
+.app .tnc-header,
+.app .pp-hero,
+.app .cp-hero {
+  background-image: linear-gradient(
+    135deg,
+    var(--lw-dark-serpent) 0%,
+    var(--lw-castleton-green) 100%
+  ) !important;
+}
+
+.app .hero-gradient-text,
+.app .cta-gradient-text {
+  background-image: linear-gradient(
+    90deg,
+    var(--lw-white) 0%,
+    var(--lw-saffaron) 50%,
+    var(--lw-earth-yellow) 100%
+  ) !important;
+}
+
+.app .pp-root,
+.app .cp-root,
+.app .tnc-root,
+.app .cu-root,
+.app .gs-root {
+  background: var(--lw-paper) !important;
+}
+
+.app .pp-card,
+.app .cp-card,
+.app .tnc-section,
+.app .cu-card,
+.app .cu-form-card,
+.app .gs-form-card {
+  background: var(--lw-white) !important;
+  border-color: rgba(19, 48, 32, 0.15) !important;
+  border-radius: 16px;
+}
+
+.app .pp-toc-item.active,
+.app .cp-toc-item.active,
+.app .tnc-nav-item.active {
+  border-left-color: var(--lw-saffaron) !important;
+}
+
+@media (max-width: 1024px) {
+  .app .pp-toc-item.active,
+  .app .cp-toc-item.active,
+  .app .tnc-nav-item.active {
+    border-bottom-color: var(--lw-saffaron) !important;
+  }
+}
+
+.logo-img,
+.footer-logo-img,
+.lw-footer-logo img,
+img[src*="lifewood-logo"] {
+  filter: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  transform: none !important;
+  border: none !important;
+  object-fit: contain !important;
+}
+
+.nav-logo-link,
+.lw-footer-logo,
+.dashboard-top-logo,
+.dashboard-basic-brand {
+  padding: 0.25rem 0.5rem !important;
+}
+
+.app .section-header,
+.app .section-title,
+.app .impact-header,
+.app .hero-content,
+.app .cta-content,
+.app .tnc-header-inner,
+.app .pp-hero,
+.app .cp-hero {
+  text-align: center;
+}
+
+.app .about-content,
+.app .pp-content,
+.app .cp-content,
+.app .tnc-clause-text,
+.app .tnc-sub-text,
+.app .cu-form-card,
+.app .cu-info-panel {
+  text-align: left;
+}
+

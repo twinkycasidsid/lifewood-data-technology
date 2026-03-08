@@ -310,6 +310,7 @@ const CareersPage = () => {
 
   return (
     <main
+      className="careers-page"
       style={{
         fontFamily: "'Manrope', sans-serif",
         background: C.bg,

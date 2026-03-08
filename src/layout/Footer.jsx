@@ -51,16 +51,16 @@ const Footer = () => {
           padding-right: 32px;
           border-right: 1px solid rgba(255,255,255,0.06);
         }
-        .lw-footer-logo img {
-          height: 28px;
+        .lw-footer-img img {
+          height: 30px;
           width: auto;
           object-fit: contain;
           opacity: 0.92;
-          filter: brightness(1.1);
+          background: transparent;
         }
         .lw-footer-tagline {
-          font-size: clamp(1rem, 1vw, 1.65rem);
-          font-weight: 800;
+          font-size: 15px;
+          font-weight: 300;
           line-height: 1.2;
           letter-spacing: -0.02em;
           color: #fff;
@@ -191,14 +191,20 @@ const Footer = () => {
           <div className="lw-footer-grid">
             {/* Brand column */}
             <div className="lw-footer-brand">
-              <button
+              {/* <button
                 type="button"
                 className="lw-footer-logo"
                 onClick={() => navigate("/")}
                 aria-label="Go to home page"
-              >
-                <img src="lifewood-logo.png" alt="Lifewood" />
-              </button>
+              > */}
+              <img
+                onClick={() => navigate("/")}
+                aria-label="Go to home page"
+                className="lw-footer-img"
+                src="https://framerusercontent.com/images/Ca8ppNsvJIfTsWEuHr50gvkDow.png?scale-down-to=1024&width=2624&height=474"
+                alt="Lifewood"
+              />
+              {/* </button> */}
 
               <p className="lw-footer-tagline">
                 The world’s leading provider of
