@@ -28,6 +28,10 @@ const Chatbot = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [windowSize, setWindowSize] = useState({
+    width: 390,
+    height: 640,
+  });
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
   const chatApiUrl = useMemo(
@@ -94,8 +98,14 @@ const Chatbot = () => {
         body: JSON.stringify({ message }),
       });
 
-      if (!response.ok) throw new Error("Chat API request failed");
       const data = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          typeof data?.reply === "string" && data.reply.trim()
+            ? data.reply
+            : "Chat API request failed",
+        );
+      }
       const reply =
         typeof data?.reply === "string" && data.reply.trim()
           ? data.reply
@@ -109,14 +119,16 @@ const Chatbot = () => {
           content: reply,
         },
       ]);
-    } catch (_error) {
+    } catch (error) {
       setMessages((prev) => [
         ...(baseMessages || prev),
         {
           id: Date.now() + 2,
           role: "bot",
           content:
-            "I am having trouble connecting right now. Please try again in a moment.",
+            error instanceof Error && error.message
+              ? error.message
+              : "I am having trouble connecting right now. Please try again in a moment.",
         },
       ]);
     } finally {
@@ -158,6 +170,13 @@ const Chatbot = () => {
     setInputValue("");
   };
 
+  const resetSize = () => {
+    setWindowSize({
+      width: 390,
+      height: 640,
+    });
+  };
+
   return (
     <>
       <style>{`
@@ -191,8 +210,12 @@ const Chatbot = () => {
           position: fixed;
           right: 20px;
           bottom: 92px;
-          width: min(390px, calc(100vw - 24px));
-          height: min(640px, calc(100dvh - 110px));
+          width: min(100vw - 24px, var(--lw-chat-width));
+          height: min(calc(100dvh - 110px), var(--lw-chat-height));
+          min-width: 320px;
+          min-height: 440px;
+          max-width: min(520px, calc(100vw - 24px));
+          max-height: calc(100dvh - 110px);
           background: #fff;
           border: 1px solid rgba(26, 46, 30, 0.12);
           border-radius: 20px;
@@ -286,6 +309,19 @@ const Chatbot = () => {
         }
         .lw-chat-settings button:first-child { margin-top: 0; }
         .lw-chat-settings button:hover { background: #f6f8f7; }
+
+        .lw-chat-resize {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 14px;
+          height: 14px;
+          border-top: 2px solid rgba(255, 255, 255, 0.5);
+          border-left: 2px solid rgba(255, 255, 255, 0.5);
+          border-top-left-radius: 8px;
+          cursor: nwse-resize;
+          z-index: 3;
+        }
 
         .lw-chat-body {
           flex: 1;
@@ -451,7 +487,13 @@ const Chatbot = () => {
             bottom: 82px;
             width: auto;
             height: min(76dvh, calc(100dvh - 90px));
+            min-width: 0;
+            max-width: none;
+            min-height: 360px;
             border-radius: 16px;
+          }
+          .lw-chat-resize {
+            display: none;
           }
         }
       `}</style>
@@ -471,11 +513,45 @@ const Chatbot = () => {
         {isOpen && (
           <motion.div
             className="lw-chat-window"
+            style={{
+              "--lw-chat-width": `${windowSize.width}px`,
+              "--lw-chat-height": `${windowSize.height}px`,
+            }}
             initial={{ opacity: 0, scale: 0.95, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 16 }}
             transition={{ type: "spring", stiffness: 260, damping: 25 }}
           >
+            <div
+              className="lw-chat-resize"
+              role="presentation"
+              onMouseDown={(event) => {
+                if (window.innerWidth <= 768) return;
+                const startX = event.clientX;
+                const startY = event.clientY;
+                const startWidth = windowSize.width;
+                const startHeight = windowSize.height;
+
+                const onMove = (moveEvent) => {
+                  const deltaX = startX - moveEvent.clientX;
+                  const deltaY = startY - moveEvent.clientY;
+                  const maxWidth = Math.min(520, window.innerWidth - 24);
+                  const maxHeight = window.innerHeight - 110;
+                  setWindowSize({
+                    width: Math.max(320, Math.min(maxWidth, startWidth + deltaX)),
+                    height: Math.max(440, Math.min(maxHeight, startHeight + deltaY)),
+                  });
+                };
+
+                const onUp = () => {
+                  window.removeEventListener("mousemove", onMove);
+                  window.removeEventListener("mouseup", onUp);
+                };
+
+                window.addEventListener("mousemove", onMove);
+                window.addEventListener("mouseup", onUp);
+              }}
+            />
             <div className="lw-chat-header">
               <div className="lw-chat-brand">
                 <div className="lw-chat-brand-dot">
@@ -525,6 +601,10 @@ const Chatbot = () => {
                     <button type="button" onClick={clearConversation}>
                       <Trash2 size={14} />
                       Clear conversation
+                    </button>
+                    <button type="button" onClick={resetSize}>
+                      <Settings size={14} />
+                      Reset window size
                     </button>
                   </motion.div>
                 )}
