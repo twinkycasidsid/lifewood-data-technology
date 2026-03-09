@@ -1,906 +1,642 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  Bot,
   MessageCircle,
   Mic,
   Send,
   Settings,
-  Bell,
-  Globe,
   Trash2,
-  Mail,
   X,
-  ChevronDown,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 
-// ─── Chatbot Component ────────────────────────────────────────────────────────
+const SUGGESTIONS = [
+  "What services does Lifewood offer?",
+  "Where are your offices located?",
+  "How can I partner with Lifewood?",
+  "I want to speak with someone.",
+];
+
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [currentStep, setCurrentStep] = useState("terms"); // terms, welcome, chat
+  const [step, setStep] = useState("terms"); // terms | welcome | chat
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [settings, setSettings] = useState({
-    soundEnabled: true,
-    language: "English",
-    clearConversation: false,
-  });
   const [showSettings, setShowSettings] = useState(false);
-  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
-  const [isSpeechSupported] = useState(
-    "webkitSpeechRecognition" in window || "SpeechRecognition" in window,
-  );
-  const recognitionRef = useRef(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const chatApiUrl = useMemo(
+    () => import.meta.env.VITE_CHAT_API_URL || "/api/chat",
+    [],
+  );
 
-  // Scroll to bottom of messages
+  const isSpeechSupported =
+    typeof window !== "undefined" &&
+    ("webkitSpeechRecognition" in window || "SpeechRecognition" in window);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isTyping]);
 
-  // Initialize Web Speech API
   useEffect(() => {
-    if (isSpeechSupported) {
-      const SpeechRecognition =
-        window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = "en-US";
+    if (!isSpeechSupported) return;
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
+    recognition.onresult = (event) => {
+      const transcript = event.results?.[0]?.[0]?.transcript || "";
+      setInputValue(transcript);
+    };
+    recognition.onend = () => setIsRecording(false);
+    recognition.onerror = () => setIsRecording(false);
+    recognitionRef.current = recognition;
 
-      recognitionRef.current.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setInputValue(transcript);
-        setIsRecording(false);
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsRecording(false);
-      };
-
-      recognitionRef.current.onerror = () => {
-        setIsRecording(false);
-      };
-    }
+    return () => recognition.stop();
   }, [isSpeechSupported]);
 
-  const handleAgree = () => {
-    setCurrentStep("welcome");
+  const welcomeMessage = {
+    id: Date.now(),
+    role: "bot",
+    content:
+      "Hi, I am Lifewood AI. Ask me anything about our services, offices, and partnerships.",
   };
 
-  const handlePromptClick = (prompt) => {
-    if (prompt === "Something else") {
-      // Hide prompt buttons and activate input
-      setMessages([
-        {
-          id: 1,
-          type: "bot",
-          content:
-            "Hi there! 👋 I'm Lifewood AI, your virtual assistant. I can answer most of your questions — and if I can't, I'll connect you with someone who can. What would you like to know?",
-          timestamp: new Date(),
-        },
-      ]);
-      setCurrentStep("chat");
-    } else {
-      // Handle specific prompts
-      const botResponse = getBotResponse(prompt);
-      setMessages([
-        {
-          id: 1,
-          type: "user",
-          content: prompt,
-          timestamp: new Date(),
-        },
-        {
-          id: 2,
-          type: "bot",
-          content: botResponse,
-          timestamp: new Date(),
-        },
-      ]);
-      setCurrentStep("chat");
+  const startChat = (seedText) => {
+    const nextMessages = [welcomeMessage];
+    if (seedText) {
+      nextMessages.push({
+        id: Date.now() + 1,
+        role: "user",
+        content: seedText,
+      });
+    }
+    setMessages(nextMessages);
+    setStep("chat");
+    if (seedText) {
+      void askAssistant(seedText, nextMessages);
     }
   };
 
-  const getBotResponse = (prompt) => {
-    // Simple responses for demo - in real implementation, this would connect to AI
-    switch (prompt) {
-      case "What services does Lifewood offer?":
-        return "Lifewood offers a comprehensive range of AI services including Data Servicing (Type A), Horizontal LLM Data (Type B), Vertical LLM Data (Type C), and AIGC (Type D). We specialize in AI-driven solutions for various industries.";
-      case "Where are your offices located?":
-        return "Lifewood has offices in multiple locations. You can find our office locations on our Offices page. We have a presence in key regions to serve our global clients effectively.";
-      case "How can I partner with Lifewood?":
-        return "To partner with Lifewood, please contact us through our Contact Us page or use the 'I'd like to speak with someone' option. Our team will be happy to discuss partnership opportunities with you.";
-      case "I'd like to speak with someone.":
-        return "I'd be happy to connect you with a human representative. Please provide your contact information and preferred time to speak, and someone from our team will reach out to you shortly.";
-      default:
-        return "Thank you for your question. I'm processing your request and will provide a detailed response shortly. If you need immediate assistance, feel free to contact us directly.";
-    }
-  };
-
-  const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
-
-    const userMessage = {
-      id: messages.length + 1,
-      type: "user",
-      content: inputValue,
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInputValue("");
-
+  const askAssistant = async (message, baseMessages = null) => {
+    setIsTyping(true);
     try {
-      const res = await fetch("http://localhost:5000/api/chat", {
+      const response = await fetch(chatApiUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message: userMessage.content }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
       });
 
-      const data = await res.json();
+      if (!response.ok) throw new Error("Chat API request failed");
+      const data = await response.json();
+      const reply =
+        typeof data?.reply === "string" && data.reply.trim()
+          ? data.reply
+          : "I could not generate a response right now. Please try again.";
 
-      const botMessage = {
-        id: userMessage.id + 1,
-        type: "bot",
-        content: data.reply,
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, botMessage]);
-    } catch (error) {
       setMessages((prev) => [
-        ...prev,
+        ...(baseMessages || prev),
         {
-          id: userMessage.id + 1,
-          type: "bot",
-          content: "I'm having trouble connecting right now.",
-          timestamp: new Date(),
+          id: Date.now() + 2,
+          role: "bot",
+          content: reply,
         },
       ]);
+    } catch (_error) {
+      setMessages((prev) => [
+        ...(baseMessages || prev),
+        {
+          id: Date.now() + 2,
+          role: "bot",
+          content:
+            "I am having trouble connecting right now. Please try again in a moment.",
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
     }
   };
-  
 
-  const handleVoiceRecord = () => {
+  const onSend = async () => {
+    const text = inputValue.trim();
+    if (!text || isTyping) return;
+
+    const next = [
+      ...messages,
+      {
+        id: Date.now(),
+        role: "user",
+        content: text,
+      },
+    ];
+    setMessages(next);
+    setInputValue("");
+    await askAssistant(text, next);
+  };
+
+  const toggleRecording = () => {
+    if (!recognitionRef.current) return;
     if (isRecording) {
-      recognitionRef.current?.stop();
-    } else {
-      recognitionRef.current?.start();
-      setIsRecording(true);
+      recognitionRef.current.stop();
+      return;
     }
+    recognitionRef.current.start();
+    setIsRecording(true);
   };
 
-  const handleClearConversation = () => {
+  const clearConversation = () => {
     setMessages([]);
-    setCurrentStep("welcome");
+    setStep("welcome");
     setShowSettings(false);
-  };
-
-  const handleEmailConversation = () => {
-    // In real implementation, this would send email
-    alert("Conversation transcript has been sent to your email.");
-    setShowSettings(false);
-  };
-
-  const toggleSound = () => {
-    setSettings({ ...settings, soundEnabled: !settings.soundEnabled });
-  };
-
-  const changeLanguage = (lang) => {
-    setSettings({ ...settings, language: lang });
-    setShowLanguageDropdown(false);
+    setInputValue("");
   };
 
   return (
     <>
       <style>{`
-        /* ── Chatbot Styles ── */
-        .chatbot-floating-btn {
+        .lw-chat-fab {
           position: fixed;
-          bottom: 24px;
-          right: 24px;
+          right: 20px;
+          bottom: 20px;
           width: 60px;
           height: 60px;
-          border-radius: 50%;
-          background: #046241;
           border: none;
-          cursor: pointer;
+          border-radius: 999px;
+          background: linear-gradient(145deg, #046241, #0f7a56);
+          color: #fff;
+          box-shadow: 0 12px 28px rgba(4, 98, 65, 0.35);
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 4px 20px rgba(4, 98, 65, 0.3);
-          z-index: 1001;
-          transition: all 0.3s ease;
+          cursor: pointer;
+          z-index: 1100;
         }
-        .chatbot-floating-btn:hover {
-          transform: scale(1.05);
-          box-shadow: 0 6px 25px rgba(4, 98, 65, 0.4);
-        }
-        .chatbot-pulse {
+        .lw-chat-fab::after {
+          content: "";
           position: absolute;
-          width: 100%;
-          height: 100%;
-          border-radius: 50%;
-          background: rgba(232, 160, 32, 0.3);
-          animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-          0% { transform: scale(1); opacity: 1; }
-          100% { transform: scale(1.2); opacity: 0; }
+          inset: -5px;
+          border-radius: 999px;
+          border: 1px solid rgba(232, 160, 32, 0.45);
+          opacity: 0.8;
         }
 
-        .chatbot-window {
+        .lw-chat-window {
           position: fixed;
-          bottom: 100px;
-          right: clamp(12px, 2.5vw, 24px);
-          width: min(380px, calc(100vw - 24px));
-          height: min(600px, calc(100dvh - 120px));
+          right: 20px;
+          bottom: 92px;
+          width: min(390px, calc(100vw - 24px));
+          height: min(640px, calc(100dvh - 110px));
           background: #fff;
-          border-radius: clamp(14px, 2.5vw, 20px);
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-          z-index: 1002;
+          border: 1px solid rgba(26, 46, 30, 0.12);
+          border-radius: 20px;
+          overflow: hidden;
+          box-shadow: 0 24px 64px rgba(10, 26, 14, 0.24);
           display: flex;
           flex-direction: column;
-          overflow: hidden;
-          font-family: 'Manrope', sans-serif;
+          z-index: 1101;
+          font-family: "Manrope", sans-serif;
         }
 
-        .chatbot-header {
-          background: #046241;
-          color: white;
-          padding: clamp(14px, 3vw, 20px);
+        .lw-chat-header {
+          padding: 14px 14px 12px;
+          background: linear-gradient(135deg, #0b1f14 0%, #123224 60%, #046241 100%);
+          color: #fff;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          border-radius: 20px 20px 0 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.15);
         }
-
-        .chatbot-header-title {
-          font-size: 18px;
-          font-weight: 700;
-        }
-
-        .chatbot-settings-btn {
-          background: none;
-          border: none;
-          color: white;
-          cursor: pointer;
-          padding: 4px;
-          border-radius: 6px;
-          transition: background 0.2s ease;
-        }
-        .chatbot-settings-btn:hover {
-          background: rgba(255, 255, 255, 0.1);
-        }
-
-        .chatbot-content {
-          flex: 1;
+        .lw-chat-brand {
           display: flex;
-          flex-direction: column;
-          overflow: hidden;
+          align-items: center;
+          gap: 10px;
         }
-
-        .chatbot-messages {
-          flex: 1;
-          padding: clamp(12px, 3vw, 20px);
-          overflow-y: auto;
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .message {
-          display: flex;
-          gap: 12px;
-          max-width: 80%;
-        }
-
-        .message.user {
-          align-self: flex-end;
-          flex-direction: row-reverse;
-        }
-
-        .message-avatar {
+        .lw-chat-brand-dot {
           width: 32px;
           height: 32px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-
-        .message.user .message-avatar {
-          background: #046241;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-size: 14px;
-          font-weight: 600;
-        }
-
-        .message.bot .message-avatar {
-          background: white;
-          border: 2px solid #046241;
+          border-radius: 10px;
+          background: rgba(232, 160, 32, 0.18);
+          border: 1px solid rgba(232, 160, 32, 0.35);
           display: flex;
           align-items: center;
           justify-content: center;
         }
-
-        .message-content {
-          background: #f5f5f5;
-          padding: 12px 16px;
-          border-radius: 16px;
+        .lw-chat-brand h4 {
+          margin: 0;
           font-size: 14px;
-          line-height: 1.4;
+          line-height: 1.1;
+          letter-spacing: 0.02em;
+          font-weight: 800;
+        }
+        .lw-chat-brand p {
+          margin: 2px 0 0;
+          font-size: 11px;
+          color: rgba(255, 255, 255, 0.75);
+        }
+        .lw-chat-head-actions {
+          display: flex;
+          gap: 6px;
+        }
+        .lw-chat-icon-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          background: rgba(255, 255, 255, 0.08);
+          color: #fff;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
         }
 
-        .message.user .message-content {
-          background: #046241;
-          color: white;
+        .lw-chat-settings {
+          position: absolute;
+          top: 58px;
+          right: 12px;
+          width: 200px;
+          background: #fff;
+          border: 1px solid rgba(26, 46, 30, 0.14);
+          border-radius: 12px;
+          box-shadow: 0 14px 32px rgba(10, 26, 14, 0.14);
+          padding: 10px;
+          z-index: 2;
         }
-
-        .chatbot-input-area {
-          padding: clamp(12px, 3vw, 20px);
-          border-top: 1px solid #e5e5e5;
-          background: white;
-        }
-
-        .chatbot-input-container {
+        .lw-chat-settings button {
+          width: 100%;
+          border: 1px solid rgba(26, 46, 30, 0.14);
+          border-radius: 10px;
+          background: #fff;
+          padding: 9px 10px;
+          font-size: 12px;
+          font-weight: 700;
+          color: #1a2e1e;
           display: flex;
           align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          margin-top: 8px;
+        }
+        .lw-chat-settings button:first-child { margin-top: 0; }
+        .lw-chat-settings button:hover { background: #f6f8f7; }
+
+        .lw-chat-body {
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          background: linear-gradient(180deg, #f9faf8 0%, #f4f6f2 100%);
+        }
+
+        .lw-chat-terms,
+        .lw-chat-welcome {
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
           gap: 12px;
-          background: #f5f5f5;
-          border-radius: 24px;
-          padding: 4px;
+          height: 100%;
+          overflow: auto;
+        }
+        .lw-chat-card {
+          background: #fff;
+          border: 1px solid rgba(26, 46, 30, 0.12);
+          border-radius: 14px;
+          padding: 14px;
+        }
+        .lw-chat-card p {
+          margin: 0;
+          font-size: 13px;
+          line-height: 1.6;
+          color: rgba(26, 46, 30, 0.72);
+        }
+        .lw-chat-row {
+          display: flex;
+          gap: 8px;
+        }
+        .lw-chat-primary,
+        .lw-chat-secondary {
+          border-radius: 999px;
+          padding: 10px 14px;
+          font-size: 12px;
+          font-weight: 800;
+          border: 1px solid transparent;
+          cursor: pointer;
+        }
+        .lw-chat-primary {
+          background: #ffab00;
+          color: #0a1a0e;
+        }
+        .lw-chat-secondary {
+          background: #fff;
+          border-color: rgba(26, 46, 30, 0.18);
+          color: #1a2e1e;
         }
 
-        .chatbot-input {
+        .lw-chat-suggestions {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .lw-chat-suggestions button {
+          text-align: left;
+          background: #fff;
+          border: 1px solid rgba(4, 98, 65, 0.2);
+          color: #046241;
+          border-radius: 12px;
+          padding: 10px 12px;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .lw-chat-messages {
+          flex: 1;
+          min-height: 0;
+          overflow: auto;
+          padding: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .lw-chat-msg {
+          max-width: 84%;
+          padding: 10px 12px;
+          border-radius: 12px;
+          font-size: 13px;
+          line-height: 1.5;
+          border: 1px solid rgba(26, 46, 30, 0.1);
+          background: #fff;
+          color: #1a2e1e;
+        }
+        .lw-chat-msg.user {
+          margin-left: auto;
+          background: #046241;
+          color: #fff;
+          border-color: rgba(4, 98, 65, 0.5);
+        }
+        .lw-chat-typing {
+          font-size: 12px;
+          color: rgba(26, 46, 30, 0.65);
+          padding-left: 2px;
+        }
+
+        .lw-chat-input-wrap {
+          border-top: 1px solid rgba(26, 46, 30, 0.12);
+          padding: 10px;
+          background: #fff;
+        }
+        .lw-chat-input-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          border: 1px solid rgba(26, 46, 30, 0.14);
+          border-radius: 999px;
+          padding: 4px;
+          background: #f8f9f7;
+        }
+        .lw-chat-input {
           flex: 1;
           border: none;
           background: transparent;
-          padding: 12px 16px;
-          font-size: 14px;
           outline: none;
-          font-family: 'Manrope', sans-serif;
+          padding: 8px 6px;
+          font-size: 13px;
+          font-family: "Manrope", sans-serif;
+          color: #1a2e1e;
         }
-
-        .chatbot-input::placeholder {
-          color: #999;
-        }
-
-        .chatbot-voice-btn, .chatbot-send-btn {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
+        .lw-chat-input-btn {
+          width: 34px;
+          height: 34px;
+          border-radius: 999px;
           border: none;
-          cursor: pointer;
-          display: flex;
+          display: inline-flex;
           align-items: center;
           justify-content: center;
-          transition: all 0.2s ease;
+          cursor: pointer;
         }
-
-        .chatbot-voice-btn {
+        .lw-chat-input-btn.voice {
           background: transparent;
-          color: #666;
+          color: rgba(26, 46, 30, 0.7);
         }
-        .chatbot-voice-btn:hover {
-          background: rgba(4, 98, 65, 0.1);
-          color: #046241;
+        .lw-chat-input-btn.voice.recording {
+          background: #d62828;
+          color: #fff;
         }
-        .chatbot-voice-btn.recording {
-          background: #ff4444;
-          color: white;
-          animation: recording-pulse 1.5s infinite;
-        }
-        @keyframes recording-pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-
-        .chatbot-send-btn {
+        .lw-chat-input-btn.send {
           background: #046241;
-          color: white;
+          color: #fff;
         }
-        .chatbot-send-btn:hover {
-          background: #035a3a;
-        }
-        .chatbot-send-btn:disabled {
-          background: #ccc;
+        .lw-chat-input-btn:disabled {
+          opacity: 0.45;
           cursor: not-allowed;
         }
 
-        .terms-card {
-          padding: clamp(14px, 4vw, 24px);
-          background: #f8f9fa;
-          border-radius: 16px;
-          margin: clamp(10px, 3vw, 20px);
-          text-align: center;
-        }
-
-        .terms-text {
-          font-size: 14px;
-          color: #666;
-          margin-bottom: 20px;
-          line-height: 1.5;
-        }
-
-        .terms-buttons {
-          display: flex;
-          gap: 12px;
-          justify-content: center;
-        }
-
-        .terms-agree-btn {
-          background: #046241;
-          color: white;
-          border: none;
-          padding: 12px 24px;
-          border-radius: 24px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: background 0.2s ease;
-        }
-        .terms-agree-btn:hover {
-          background: #035a3a;
-        }
-
-        .terms-decline-btn {
-          background: none;
-          border: none;
-          color: #666;
-          cursor: pointer;
-          text-decoration: underline;
-          font-size: 14px;
-        }
-
-        .welcome-screen {
-          padding: clamp(14px, 4vw, 24px);
-          text-align: center;
-          height: 100%;
-          display: flex;
-          flex-direction: column;
-        }
-
-        .welcome-logo {
-          width: clamp(90px, 26vw, 120px);
-          height: auto;
-          margin: 0 auto 16px;
-        }
-
-        .welcome-name {
-          font-size: 24px;
-          font-weight: 700;
-          color: #046241;
-          margin-bottom: 4px;
-        }
-
-        .welcome-subtitle {
-          font-size: 14px;
-          color: #666;
-          margin-bottom: 24px;
-        }
-
-        .welcome-greeting {
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-          margin-bottom: 24px;
-          text-align: left;
-        }
-
-        .welcome-avatar {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          background: white;
-          border: 2px solid #046241;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-
-        .welcome-text {
-          font-size: 14px;
-          color: #333;
-          line-height: 1.5;
-        }
-
-        .welcome-prompts {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .welcome-prompt-btn {
-          background: none;
-          border: 2px solid #E8A020;
-          color: #E8A020;
-          padding: 12px 16px;
-          border-radius: 24px;
-          cursor: pointer;
-          font-size: 14px;
-          font-weight: 500;
-          transition: all 0.2s ease;
-        }
-        .welcome-prompt-btn:hover {
-          background: #E8A020;
-          color: white;
-        }
-
-        .settings-panel {
-          position: absolute;
-          top: 70px;
-          right: clamp(8px, 2vw, 20px);
-          background: white;
-          border: 1px solid #e5e5e5;
-          border-radius: 12px;
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-          padding: 16px;
-          min-width: min(200px, calc(100vw - 72px));
-          z-index: 1003;
-        }
-
-        .settings-item {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 8px 0;
-          font-size: 14px;
-        }
-
-        .settings-toggle {
-          width: 40px;
-          height: 20px;
-          background: #ccc;
-          border-radius: 10px;
-          position: relative;
-          cursor: pointer;
-          transition: background 0.2s ease;
-        }
-        .settings-toggle.active {
-          background: #046241;
-        }
-        .settings-toggle::after {
-          content: '';
-          position: absolute;
-          width: 16px;
-          height: 16px;
-          background: white;
-          border-radius: 50%;
-          top: 2px;
-          left: 2px;
-          transition: transform 0.2s ease;
-        }
-        .settings-toggle.active::after {
-          transform: translateX(20px);
-        }
-
-        .settings-dropdown {
-          position: relative;
-        }
-        .settings-dropdown-btn {
-          background: none;
-          border: 1px solid #e5e5e5;
-          padding: 6px 12px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 14px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .settings-dropdown-menu {
-          position: absolute;
-          top: 100%;
-          left: 0;
-          right: 0;
-          background: white;
-          border: 1px solid #e5e5e5;
-          border-radius: 6px;
-          margin-top: 4px;
-          max-height: 150px;
-          overflow-y: auto;
-          z-index: 1004;
-        }
-        .settings-dropdown-item {
-          padding: 8px 12px;
-          cursor: pointer;
-          font-size: 14px;
-        }
-        .settings-dropdown-item:hover {
-          background: #f5f5f5;
-        }
-
-        .settings-action-btn {
-          width: 100%;
-          padding: 8px 12px;
-          border: 1px solid #e5e5e5;
-          background: none;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 14px;
-          margin-top: 8px;
-          transition: all 0.2s ease;
-        }
-        .settings-action-btn:hover {
-          background: #f5f5f5;
-        }
-        .settings-action-btn.clear:hover {
-          background: #ff4444;
-          color: white;
-          border-color: #ff4444;
-        }
-
-        /* Mobile styles */
         @media (max-width: 768px) {
-          .chatbot-window {
-            width: calc(100vw - 16px);
-            height: calc(100dvh - 100px);
-            bottom: 80px;
+          .lw-chat-fab {
+            right: 14px;
+            bottom: 14px;
+            width: 56px;
+            height: 56px;
+          }
+          .lw-chat-window {
             right: 8px;
             left: 8px;
-          }
-          .chatbot-floating-btn {
-            bottom: 16px;
-            right: 16px;
+            bottom: 82px;
+            width: auto;
+            height: min(76dvh, calc(100dvh - 90px));
+            border-radius: 16px;
           }
         }
       `}</style>
 
-      {/* ── Floating Button ── */}
       <motion.button
-        className="chatbot-floating-btn"
-        onClick={() => setIsOpen(!isOpen)}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
+        className="lw-chat-fab"
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.96 }}
+        aria-label="Open Lifewood AI chat"
       >
-        <div className="chatbot-pulse"></div>
-        <MessageCircle size={24} color="white" />
+        <MessageCircle size={24} />
       </motion.button>
 
-      {/* ── Chat Window ── */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            className="chatbot-window"
-            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            className="lw-chat-window"
+            initial={{ opacity: 0, scale: 0.95, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 20 }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            exit={{ opacity: 0, scale: 0.95, y: 16 }}
+            transition={{ type: "spring", stiffness: 260, damping: 25 }}
           >
-            {/* Header */}
-            <div className="chatbot-header">
-              <div className="chatbot-header-title">LIFEWOOD AI</div>
-              <button
-                className="chatbot-settings-btn"
-                onClick={() => setShowSettings(!showSettings)}
-              >
-                <Settings size={20} />
-              </button>
+            <div className="lw-chat-header">
+              <div className="lw-chat-brand">
+                <div className="lw-chat-brand-dot">
+                  <Bot size={17} />
+                </div>
+                <div>
+                  <h4>Lifewood AI</h4>
+                  <p>Online assistant</p>
+                </div>
+              </div>
+              <div className="lw-chat-head-actions">
+                <button
+                  type="button"
+                  className="lw-chat-icon-btn"
+                  onClick={() => setShowSettings((prev) => !prev)}
+                  aria-label="Chat settings"
+                >
+                  <Settings size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="lw-chat-icon-btn"
+                  onClick={() => setIsOpen(false)}
+                  aria-label="Close chat"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
-            {/* Content */}
-            <div className="chatbot-content">
-              {currentStep === "terms" && (
-                <div className="terms-card">
-                  <div className="terms-text">
-                    Before we begin, please review our Terms of Use and Privacy
-                    Policy. By continuing, you agree that your conversation with
-                    Lifewood AI may be used to improve our services.
+            <div className="lw-chat-body">
+              <AnimatePresence>
+                {showSettings && (
+                  <motion.div
+                    className="lw-chat-settings"
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setSoundEnabled((prev) => !prev)}
+                    >
+                      {soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+                      {soundEnabled ? "Sound: On" : "Sound: Off"}
+                    </button>
+                    <button type="button" onClick={clearConversation}>
+                      <Trash2 size={14} />
+                      Clear conversation
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {step === "terms" && (
+                <div className="lw-chat-terms">
+                  <div className="lw-chat-card">
+                    <p>
+                      Before we begin, please review our Terms and Privacy Policy.
+                      By continuing, you agree that your conversation may be used
+                      to improve service quality.
+                    </p>
                   </div>
-                  <div className="terms-buttons">
-                    <button className="terms-agree-btn" onClick={handleAgree}>
-                      I Agree — Let's Chat
+                  <div className="lw-chat-row">
+                    <button
+                      type="button"
+                      className="lw-chat-primary"
+                      onClick={() => setStep("welcome")}
+                    >
+                      I agree
                     </button>
                     <button
-                      className="terms-decline-btn"
+                      type="button"
+                      className="lw-chat-secondary"
                       onClick={() => setIsOpen(false)}
                     >
-                      No Thanks
+                      Close
                     </button>
                   </div>
                 </div>
               )}
 
-              {currentStep === "welcome" && (
-                <div className="welcome-screen">
-                  <img
-                    src="/lifewood-logo.png"
-                    alt="LIFEWOOD"
-                    className="welcome-logo"
-                  />
-                  <div className="welcome-name">Lifewood AI</div>
-                  <div className="welcome-subtitle">
-                    Lifewood's AI Assistant · Powered by AI
+              {step === "welcome" && (
+                <div className="lw-chat-welcome">
+                  <div className="lw-chat-card">
+                    <p>
+                      Ask me anything about Lifewood. You can start with one of
+                      these quick questions.
+                    </p>
                   </div>
-                  <div className="welcome-greeting">
-                    <div className="welcome-avatar">
-                      <img
-                        src="/lifewood-logo.png"
-                        alt="Lifewood"
-                        style={{ width: 20, height: 20, objectFit: "contain" }}
-                      />
-                    </div>
-                    <div className="welcome-text">
-                      Hi there! 👋 I'm Lifewood AI, your virtual assistant. I
-                      can answer most of your questions — and if I can't, I'll
-                      connect you with someone who can. What would you like to
-                      know?
-                    </div>
-                  </div>
-                  <div className="welcome-prompts">
-                    <button
-                      className="welcome-prompt-btn"
-                      onClick={() =>
-                        handlePromptClick("What services does Lifewood offer?")
-                      }
-                    >
-                      What services does Lifewood offer?
-                    </button>
-                    <button
-                      className="welcome-prompt-btn"
-                      onClick={() =>
-                        handlePromptClick("Where are your offices located?")
-                      }
-                    >
-                      Where are your offices located?
-                    </button>
-                    <button
-                      className="welcome-prompt-btn"
-                      onClick={() =>
-                        handlePromptClick("How can I partner with Lifewood?")
-                      }
-                    >
-                      How can I partner with Lifewood?
-                    </button>
-                    <button
-                      className="welcome-prompt-btn"
-                      onClick={() =>
-                        handlePromptClick("I'd like to speak with someone.")
-                      }
-                    >
-                      I'd like to speak with someone.
-                    </button>
-                    <button
-                      className="welcome-prompt-btn"
-                      onClick={() => handlePromptClick("Something else")}
-                    >
+                  <div className="lw-chat-suggestions">
+                    {SUGGESTIONS.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => startChat(item)}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                    <button type="button" onClick={() => startChat()}>
                       Something else
                     </button>
                   </div>
                 </div>
               )}
 
-              {currentStep === "chat" && (
+              {step === "chat" && (
                 <>
-                  <div className="chatbot-messages">
-                    {messages.map((message) => (
+                  <div className="lw-chat-messages">
+                    {messages.map((msg) => (
                       <div
-                        key={message.id}
-                        className={`message ${message.type}`}
+                        key={msg.id}
+                        className={`lw-chat-msg ${msg.role === "user" ? "user" : ""}`}
                       >
-                        <div className="message-avatar">
-                          {message.type === "user" ? (
-                            "U"
-                          ) : (
-                            <img
-                              src="/lifewood-logo.png"
-                              alt="Lifewood"
-                              style={{
-                                width: 20,
-                                height: 20,
-                                objectFit: "contain",
-                              }}
-                            />
-                          )}
-                        </div>
-                        <div className="message-content">{message.content}</div>
+                        {msg.content}
                       </div>
                     ))}
+                    {isTyping && (
+                      <div className="lw-chat-typing">Lifewood AI is typing...</div>
+                    )}
                     <div ref={messagesEndRef} />
                   </div>
 
-                  <div className="chatbot-input-area">
-                    <div className="chatbot-input-container">
+                  <div className="lw-chat-input-wrap">
+                    <div className="lw-chat-input-row">
                       <button
-                        className={`chatbot-voice-btn ${isRecording ? "recording" : ""}`}
-                        onClick={handleVoiceRecord}
+                        type="button"
+                        className={`lw-chat-input-btn voice ${isRecording ? "recording" : ""}`}
+                        onClick={toggleRecording}
                         disabled={!isSpeechSupported}
+                        aria-label="Voice input"
                       >
-                        <Mic size={20} />
+                        <Mic size={16} />
                       </button>
                       <input
+                        className="lw-chat-input"
                         type="text"
-                        className="chatbot-input"
-                        placeholder="Message Lifewood AI..."
+                        placeholder="Type your message..."
                         value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === "Enter") handleSendMessage();
+                        onChange={(event) => setInputValue(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            void onSend();
+                          }
                         }}
                       />
                       <button
-                        className="chatbot-send-btn"
-                        onClick={handleSendMessage}
-                        disabled={!inputValue.trim()}
+                        type="button"
+                        className="lw-chat-input-btn send"
+                        onClick={() => void onSend()}
+                        disabled={!inputValue.trim() || isTyping}
+                        aria-label="Send message"
                       >
-                        <Send size={20} />
+                        <Send size={16} />
                       </button>
                     </div>
                   </div>
                 </>
               )}
             </div>
-
-            {/* Settings Panel */}
-            <AnimatePresence>
-              {showSettings && (
-                <motion.div
-                  className="settings-panel"
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                >
-                  <div className="settings-item">
-                    <span>🔔 Notification Sound</span>
-                    <div
-                      className={`settings-toggle ${settings.soundEnabled ? "active" : ""}`}
-                      onClick={toggleSound}
-                    ></div>
-                  </div>
-                  <div className="settings-item">
-                    <span>🌐 Language</span>
-                    <div className="settings-dropdown">
-                      <button
-                        className="settings-dropdown-btn"
-                        onClick={() =>
-                          setShowLanguageDropdown(!showLanguageDropdown)
-                        }
-                      >
-                        {settings.language} <ChevronDown size={14} />
-                      </button>
-                      {showLanguageDropdown && (
-                        <div className="settings-dropdown-menu">
-                          {[
-                            "English",
-                            "Filipino",
-                            "French",
-                            "Spanish",
-                            "Mandarin",
-                            "Arabic",
-                            "Japanese",
-                          ].map((lang) => (
-                            <div
-                              key={lang}
-                              className="settings-dropdown-item"
-                              onClick={() => changeLanguage(lang)}
-                            >
-                              {lang}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    className="settings-action-btn clear"
-                    onClick={handleClearConversation}
-                  >
-                    🗑️ Clear Conversation
-                  </button>
-                  <button
-                    className="settings-action-btn"
-                    onClick={handleEmailConversation}
-                  >
-                    ✉️ Email This Conversation
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
