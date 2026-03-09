@@ -66,6 +66,7 @@
 
 html {
   scroll-behavior: smooth;
+  width: 100%;
 }
 
 body {
@@ -74,7 +75,15 @@ body {
   line-height: 1.6;
   color: var(--color-dark-serpent);
   background-color: var(--color-white);
-  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+#root,
+.app {
+  width: 100%;
+  max-width: 100%;
 }
 
 /* Typography */
@@ -287,4 +296,3 @@ img {
   background: var(--color-saffaron);
   color: var(--color-dark-serpent);
 }
-

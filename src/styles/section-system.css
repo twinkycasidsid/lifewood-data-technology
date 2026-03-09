@@ -79,7 +79,6 @@
 
 .section-company .lw-offices-hero,
 .section-company .lw-news-hero,
-.section-company .phil-hero-section,
 .section-company .ai-page-hero,
 .section-ai .ap-hero,
 .section-offer .ds-hero,
@@ -133,4 +132,11 @@
     border-left-color: rgba(26, 46, 30, 0.1);
     border-bottom-color: #ffb347;
   }
+}
+
+/* Remove legacy top offset from page-level classes now rendered under fixed nav */
+.section-company .about-page,
+.section-offer .aigc-page,
+.section-careers .careers-page {
+  padding-top: 0 !important;
 }

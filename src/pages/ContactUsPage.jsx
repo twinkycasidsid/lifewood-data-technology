@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Phone, Mail, Send, CheckCircle, ChevronDown, MapPin, ArrowRight, Clock } from "lucide-react";
+import { Mail, Send, CheckCircle, ChevronDown, MapPin, ArrowRight } from "lucide-react";
 
 const ContactUs = ({ onNavigate = () => {} }) => {
   const [formData, setFormData] = useState({
@@ -25,10 +25,10 @@ const ContactUs = ({ onNavigate = () => {} }) => {
   };
 
   const services = [
-    "Type A – Data Servicing",
-    "Type B – Horizontal LLM Data",
-    "Type C – Vertical LLM Data",
-    "Type D – AIGC",
+    "Type A - Data Servicing",
+    "Type B - Horizontal LLM Data",
+    "Type C - Vertical LLM Data",
+    "Type D - AIGC",
     "AI Services",
     "AI Projects",
     "General Inquiry",
@@ -49,7 +49,7 @@ const ContactUs = ({ onNavigate = () => {} }) => {
           padding-top: 80px;
         }
 
-        /* ── Hero ── */
+        /* â”€â”€ Hero â”€â”€ */
         .cu-hero {
           position: relative;
           padding: 60px 40px 52px;
@@ -103,7 +103,7 @@ const ContactUs = ({ onNavigate = () => {} }) => {
           font-family: 'Manrope', sans-serif;
         }
 
-        /* ── Body grid ── */
+        /* â”€â”€ Body grid â”€â”€ */
         .cu-body {
           max-width: 1160px;
           margin: 0 auto;
@@ -114,14 +114,14 @@ const ContactUs = ({ onNavigate = () => {} }) => {
           align-items: start;
         }
 
-        /* ── Info panel ── */
+        /* â”€â”€ Info panel â”€â”€ */
         .cu-info-panel {
           display: flex;
           flex-direction: column;
           gap: 14px;
         }
 
-        /* ── Offices redirect card ── */
+        /* â”€â”€ Offices redirect card â”€â”€ */
         .cu-offices-card {
           background: linear-gradient(145deg, #1a2e1e 0%, #0d3318 100%);
           border-radius: 18px;
@@ -221,7 +221,7 @@ const ContactUs = ({ onNavigate = () => {} }) => {
         }
         .cu-offices-card:hover .cu-offices-cta { gap: 11px; }
 
-        /* ── Shared card ── */
+        /* â”€â”€ Shared card â”€â”€ */
         .cu-card {
           background: #fff;
           border: 1px solid rgba(26,46,30,0.085);
@@ -258,7 +258,7 @@ const ContactUs = ({ onNavigate = () => {} }) => {
         .cu-contact-row:last-child { margin-bottom: 0; }
         .cu-contact-row svg { color: #046241; flex-shrink: 0; }
 
-        /* ── Response card ── */
+        /* â”€â”€ Response card â”€â”€ */
         .cu-response-card {
           background: rgba(4,98,65,0.04);
           border: 1px solid rgba(4,98,65,0.11);
@@ -278,7 +278,7 @@ const ContactUs = ({ onNavigate = () => {} }) => {
           font-weight: 700;
         }
 
-        /* ── Form card ── */
+        /* â”€â”€ Form card â”€â”€ */
         .cu-form-card {
           background: #fff;
           border: 1px solid rgba(26,46,30,0.085);
@@ -385,7 +385,7 @@ const ContactUs = ({ onNavigate = () => {} }) => {
         }
         .cu-submit:disabled { opacity: 0.50; cursor: not-allowed; transform: none; }
 
-        /* ── Success ── */
+        /* â”€â”€ Success â”€â”€ */
         .cu-success {
           display: flex;
           flex-direction: column;
@@ -419,7 +419,7 @@ const ContactUs = ({ onNavigate = () => {} }) => {
           font-family: 'Manrope', sans-serif;
         }
 
-        /* ── Responsive ── */
+        /* â”€â”€ Responsive â”€â”€ */
         @media (max-width: 900px) {
           .cu-hero { padding: 48px 24px 44px; }
           .cu-body {
@@ -494,36 +494,9 @@ const ContactUs = ({ onNavigate = () => {} }) => {
                 View all offices <ArrowRight size={13} strokeWidth={2.5} />
               </div>
             </button>
-
-            {/* General contact */}
-            <div className="cu-card">
-              <div className="cu-section-label">
-                <Mail size={11} />
-                General Enquiries
-              </div>
-              <div className="cu-contact-row">
-                <Mail size={14} />
-                <span>info@lifewood.com</span>
-              </div>
-              <div className="cu-contact-row">
-                <Phone size={14} />
-                <span>+852 2XXX XXXX (Main Line)</span>
-              </div>
-            </div>
-
-            {/* Response time */}
-            <div className="cu-response-card">
-              <div className="cu-section-label">
-                <Clock size={11} style={{ color: "#E8A020" }} />
-                Response Time
-              </div>
-              <p>
-                We typically respond within <strong>1 business day</strong>. For urgent matters, call our main line Mon–Fri, 9 AM – 6 PM HKT.
-              </p>
-            </div>
           </motion.div>
 
-          {/* Right — form */}
+            {/* Right — form */}
           <motion.div
             className="cu-form-card"
             initial={{ opacity: 0, x: 16 }}
@@ -574,7 +547,7 @@ const ContactUs = ({ onNavigate = () => {} }) => {
                       <label className="cu-label">Service Interest</label>
                       <div className="cu-select-wrap">
                         <select className="cu-select" name="service" value={formData.service} onChange={handleChange} required>
-                          <option value="" disabled>Select a service…</option>
+                          <option value="" disabled>Select a service...</option>
                           {services.map((s) => <option key={s} value={s}>{s}</option>)}
                         </select>
                         <ChevronDown size={13} />
@@ -582,7 +555,7 @@ const ContactUs = ({ onNavigate = () => {} }) => {
                     </div>
                     <div className="cu-field full">
                       <label className="cu-label">Message</label>
-                      <textarea className="cu-textarea" name="message" placeholder="Tell us about your project or question…" value={formData.message} onChange={handleChange} required />
+                      <textarea className="cu-textarea" name="message" placeholder="Tell us about your project or questionâ€¦" value={formData.message} onChange={handleChange} required />
                     </div>
                   </div>
 
@@ -596,7 +569,7 @@ const ContactUs = ({ onNavigate = () => {} }) => {
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: "spin 0.7s linear infinite" }}>
                           <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                         </svg>
-                        Sending…
+                        Sendingâ€¦
                       </>
                     ) : (
                       <>

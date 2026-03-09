@@ -351,24 +351,6 @@ const AIProjectsPage = () => {
           font-weight: 500;
           max-width: 360px;
         }
-        .ap-card-arrow {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 10.5px;
-          font-weight: 700;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
-          color: #c47f00;
-          margin-top: 2px;
-        }
-        .ap-card-arrow svg {
-          transition: transform 0.22s ease;
-        }
-        .ap-card:hover .ap-card-arrow svg {
-          transform: translateX(4px);
-        }
-
         /* ── Animations ── */
         @keyframes ap-fade-up {
           from { opacity: 0; transform: translateY(24px); }
@@ -465,12 +447,6 @@ const AIProjectsPage = () => {
                 </span>
                 <h3>{project.title}</h3>
                 <p>{project.text}</p>
-                <span className="ap-card-arrow">
-                  Learn more
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 6h8M7 3l3 3-3 3" stroke="#c47f00" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
               </div>
             </article>
           ))}
@@ -481,3 +457,5 @@ const AIProjectsPage = () => {
 }
 
 export default AIProjectsPage
+
+

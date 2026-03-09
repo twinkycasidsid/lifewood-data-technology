@@ -605,6 +605,7 @@ const PrivacyPolicyPage = ({ onNavigate = () => {} }) => {
           border-left: 2px solid transparent;
           border-radius: 0 8px 8px 0;
           transition: color 0.18s ease, background 0.18s ease;
+          overflow-wrap: anywhere;
         }
         .pp-toc-item:hover {
           color: #1a2e1e;
@@ -758,6 +759,19 @@ const PrivacyPolicyPage = ({ onNavigate = () => {} }) => {
           .pp-card { padding: 22px 20px; }
           .pp-section-header { gap: 12px; }
           .pp-hero-meta { gap: 14px; }
+          .pp-toc { padding: 10px 0 10px; }
+          .pp-toc-row {
+            flex-wrap: wrap;
+            overflow-x: visible;
+            gap: 8px;
+          }
+          .pp-toc-item {
+            max-width: none;
+            white-space: normal;
+            line-height: 1.25;
+            padding: 8px 10px;
+            font-size: 12px;
+          }
         }
 
         @media (max-width: 1024px) {
@@ -766,7 +780,8 @@ const PrivacyPolicyPage = ({ onNavigate = () => {} }) => {
             padding: 0 14px 64px;
           }
           .pp-toc {
-            top: 72px;
+            position: static;
+            top: auto;
             z-index: 20;
             border-right: none;
             border-bottom: 1px solid rgba(26,46,30,0.12);
@@ -781,6 +796,8 @@ const PrivacyPolicyPage = ({ onNavigate = () => {} }) => {
             flex-direction: row;
             gap: 8px;
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
             padding-bottom: 2px;
           }
           .pp-toc-item {
@@ -790,6 +807,10 @@ const PrivacyPolicyPage = ({ onNavigate = () => {} }) => {
             border-radius: 999px;
             border: 1px solid rgba(26,46,30,0.10);
             background: #fff;
+            flex: 0 0 auto;
+            max-width: min(82vw, 360px);
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
           .pp-toc-item.active {
             border-left: 1px solid rgba(26,46,30,0.10);
@@ -960,3 +981,4 @@ const PrivacyPolicyPage = ({ onNavigate = () => {} }) => {
 };
 
 export default PrivacyPolicyPage;
+

@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 
 // CTA Section — color scheme aligned with Hero (saffron / black / dark teal-green)
-const CTA = ({ onNavigate = () => {}, onSetAuthMode = () => {} }) => {
+const CTA = ({ onNavigate = () => {} }) => {
   return (
     <>
       <style>{`
@@ -31,8 +31,8 @@ const CTA = ({ onNavigate = () => {}, onSetAuthMode = () => {} }) => {
         /* Saffron glow — mirrors Hero's left-side warmth */
         .cta-glow-saffron {
           position: absolute;
-          width: 480px;
-          height: 480px;
+          width: clamp(280px, 42vw, 480px);
+          height: clamp(280px, 42vw, 480px);
           border-radius: 50%;
           background: radial-gradient(circle, rgba(255, 171, 0, 0.10) 0%, transparent 70%);
           top: -80px;
@@ -45,8 +45,8 @@ const CTA = ({ onNavigate = () => {}, onSetAuthMode = () => {} }) => {
         /* Green glow — brightens the #133020 tone at bottom-right */
         .cta-glow-green {
           position: absolute;
-          width: 560px;
-          height: 560px;
+          width: clamp(320px, 48vw, 560px);
+          height: clamp(320px, 48vw, 560px);
           border-radius: 50%;
           background: radial-gradient(circle, rgba(19, 48, 32, 0.7) 0%, transparent 70%);
           bottom: -120px;
@@ -249,10 +249,7 @@ const CTA = ({ onNavigate = () => {}, onSetAuthMode = () => {} }) => {
               <button
                 type="button"
                 className="btn-primary"
-                onClick={() => {
-                  onSetAuthMode("signin");
-                  onNavigate("/get-started");
-                }}
+                onClick={() => onNavigate("/contact-us")}
               >
                 Build Your Foundation
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
@@ -269,7 +266,7 @@ const CTA = ({ onNavigate = () => {}, onSetAuthMode = () => {} }) => {
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={() => onNavigate("/contact-us")}
+                onClick={() => onNavigate("/phil-impact")}
               >
                 See Our Impact
               </button>

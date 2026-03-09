@@ -314,7 +314,7 @@ const Navigation = ({
             maxWidth: "1440px",
             width: "100%",
             margin: "0 auto",
-            padding: "0 40px",
+            padding: "0 clamp(12px, 4vw, 40px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -487,8 +487,8 @@ const Navigation = ({
               background: "rgba(255,255,255,0.10)",
               border: "1px solid rgba(255,255,255,0.15)",
               borderRadius: "10px",
-              width: "42px",
-              height: "42px",
+              width: "40px",
+              height: "40px",
               cursor: "pointer",
               color: "rgba(255,255,255,0.85)",
               flexShrink: 0,
@@ -519,28 +519,30 @@ const Navigation = ({
       </AnimatePresence>
 
       {/* Mobile drawer */}
-      <motion.div
-        initial={{ x: "100%" }}
-        animate={{ x: isMobileMenuOpen ? "0%" : "100%" }}
-        transition={{ type: "spring", stiffness: 300, damping: 32 }}
-        style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          height: "100vh",
-          width: "88vw",
-          maxWidth: "380px",
-          background: "#fff",
-          zIndex: 999,
-          borderLeft: "1px solid rgba(26,46,30,0.08)",
-          boxShadow: "-12px 0 48px rgba(0,0,0,0.14)",
-          display: "flex",
-          flexDirection: "column",
-          padding: "24px",
-          paddingTop: "88px",
-          overflowY: "auto",
-        }}
-      >
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: "0%" }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", stiffness: 300, damping: 32 }}
+            style={{
+              position: "fixed",
+              top: 0,
+              right: 0,
+              height: "100dvh",
+              width: "min(88vw, 380px)",
+              background: "#fff",
+              zIndex: 999,
+              borderLeft: "1px solid rgba(26,46,30,0.08)",
+              boxShadow: "-12px 0 48px rgba(0,0,0,0.14)",
+              display: "flex",
+              flexDirection: "column",
+              padding: "clamp(16px, 4vw, 24px)",
+              paddingTop: "88px",
+              overflowY: "auto",
+            }}
+          >
         <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
           {navItems.map((item, index) => {
             const hasChildren = !!(item.children && item.children.length);
@@ -634,7 +636,7 @@ const Navigation = ({
             className="lw-mobile-cta"
             onClick={() => {
               closeAll();
-              navigate("/login");
+              navigate("/get-started");
             }}
           >
             <UserCircle2 size={17} strokeWidth={2} />
@@ -645,14 +647,16 @@ const Navigation = ({
             className="lw-mobile-secondary"
             onClick={() => {
               closeAll();
-              navigate("/contact");
+              navigate("/contact-us");
             }}
           >
             <Phone size={15} strokeWidth={2.5} />
             <span>Contact Us</span>
           </button>
         </div>
-      </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 };

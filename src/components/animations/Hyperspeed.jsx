@@ -47,13 +47,14 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
   const appRef = useRef(null);
 
   useEffect(() => {
+    const mountEl = hyperspeed.current;
+    if (!mountEl) return;
+
     if (appRef.current) {
       appRef.current.dispose();
-      const container = document.getElementById('lights');
-      if (container) {
-        while (container.firstChild) {
-          container.removeChild(container.firstChild);
-        }
+      appRef.current = null;
+      while (mountEl.firstChild) {
+        mountEl.removeChild(mountEl.firstChild);
       }
     }
     const mountainUniforms = {
@@ -1098,7 +1099,8 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
     }
 
     (function () {
-      const container = document.getElementById('lights');
+      const container = mountEl;
+      if (!container) return;
       const options = { ...DEFAULT_EFFECT_OPTIONS, ...effectOptions, colors: { ...DEFAULT_EFFECT_OPTIONS.colors, ...effectOptions.colors } };
       options.distortion = distortions[options.distortion];
 
@@ -1110,11 +1112,17 @@ const Hyperspeed = ({ effectOptions = DEFAULT_EFFECT_OPTIONS }) => {
     return () => {
       if (appRef.current) {
         appRef.current.dispose();
+        appRef.current = null;
+      }
+      if (mountEl) {
+        while (mountEl.firstChild) {
+          mountEl.removeChild(mountEl.firstChild);
+        }
       }
     };
   }, [effectOptions]);
 
-  return <div id="lights" ref={hyperspeed}></div>;
+  return <div className="hyperspeed-root" ref={hyperspeed}></div>;
 };
 
 export default Hyperspeed;

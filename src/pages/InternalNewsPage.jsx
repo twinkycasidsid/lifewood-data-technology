@@ -286,8 +286,7 @@ const InternalNewsPage = () => {
 
         <div className="lw-news-title-wrap">
           <h1 className="lw-news-title" id="news-title">
-            RootsTech<br />
-            <em>2026.</em>
+            RootsTech <em>2026.</em>
           </h1>
           <p className="lw-news-desc">
             Lifewood's latest internal feature — stay connected with the stories,

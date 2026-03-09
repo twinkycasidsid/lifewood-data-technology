@@ -1,4 +1,5 @@
-import { motion, useScroll, useTransform } from 'framer-motion'
+import { useEffect, useState } from 'react'
+import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion'
 import Hyperspeed from '../animations/Hyperspeed'
 
 // ─── Lifewood "Data Stream" effect options ────────────────────────────────────
@@ -12,8 +13,8 @@ const lifewoodOptions = {
   fovSpeedUp: 120,
   speedUp: 3,
   carLightsFade: 0.5,
-  totalSideLightSticks: 60,
-  lightPairsPerRoadWay: 50,
+  totalSideLightSticks: 36,
+  lightPairsPerRoadWay: 32,
   shoulderLinesWidthPercentage: 0.05,
   brokenLinesWidthPercentage: 0.1,
   brokenLinesLengthPercentage: 0.5,
@@ -40,9 +41,20 @@ const lifewoodOptions = {
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 const Hero = ({ onNavigate = () => {} }) => {
+  const prefersReducedMotion = useReducedMotion()
+  const [isMobile, setIsMobile] = useState(false)
   const { scrollY } = useScroll()
   const y1 = useTransform(scrollY, [0, 500], [0, 150])
   const y2 = useTransform(scrollY, [0, 500], [0, -100])
+  const lowPowerMode = prefersReducedMotion || isMobile
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1024px)')
+    const update = () => setIsMobile(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
 
   return (
     <>
@@ -61,9 +73,9 @@ const Hero = ({ onNavigate = () => {} }) => {
         }
 
         /* ── Force Hyperspeed canvas to fill the section ── */
-        #lights,
-        #lights > div,
-        #lights canvas {
+        .hero-lights,
+        .hero-lights > div,
+        .hero-lights canvas {
           position: absolute !important;
           top: 0 !important; left: 0 !important;
           width: 100% !important;
@@ -238,7 +250,7 @@ const Hero = ({ onNavigate = () => {} }) => {
 
         {/* ── Hyperspeed canvas ── */}
         <div
-          id="lights"
+          className="hero-lights"
           role="img"
           aria-label="Visualization of global AI data flow representing Lifewood's worldwide data engineering operations"
           style={{ position: 'absolute', inset: 0, zIndex: 0 }}
@@ -254,7 +266,18 @@ const Hero = ({ onNavigate = () => {} }) => {
             annotation, and data engineering at global scale.
           </span>
 
-          <Hyperspeed effectOptions={lifewoodOptions} />
+          {lowPowerMode ? (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background:
+                  'radial-gradient(circle at 50% 20%, rgba(255,171,0,0.22) 0%, rgba(255,171,0,0.08) 30%, rgba(4,98,65,0.12) 58%, rgba(0,0,0,0.95) 100%)',
+              }}
+            />
+          ) : (
+            <Hyperspeed effectOptions={lifewoodOptions} />
+          )}
         </div>
 
         {/* Overlays */}
@@ -262,8 +285,8 @@ const Hero = ({ onNavigate = () => {} }) => {
         <div className="hero-bottom-fade" />
 
         {/* Parallax shapes */}
-        <motion.div style={{ y: y1 }} className="hero-shape shape-1" />
-        <motion.div style={{ y: y2 }} className="hero-shape shape-2" />
+        {!lowPowerMode && <motion.div style={{ y: y1 }} className="hero-shape shape-1" />}
+        {!lowPowerMode && <motion.div style={{ y: y2 }} className="hero-shape shape-2" />}
 
         {/* ── Content ── */}
         <div className="hero-content">
@@ -315,7 +338,7 @@ const Hero = ({ onNavigate = () => {} }) => {
             <button
               type="button"
               className="btn-ignite"
-              onClick={() => onNavigate('/data-service')}
+              onClick={() => onNavigate('/contact-us')}
             >
               Ignite Your Data
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
@@ -328,7 +351,7 @@ const Hero = ({ onNavigate = () => {} }) => {
             <button
               type="button"
               className="btn-edge"
-              onClick={() => onNavigate('/about')}
+              onClick={() => onNavigate('/ai-services')}
             >
               See the Human Edge
             </button>

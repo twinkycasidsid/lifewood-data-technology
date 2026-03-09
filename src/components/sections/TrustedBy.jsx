@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { motion } from 'framer-motion'
 
 const partners = [
@@ -11,27 +10,25 @@ const partners = [
   { name: 'Moore Foundation', colorLogo: '/partners/moore-1.png',          monoLogo: '/partners/moore-2.png' },
 ]
 
-const PartnerLogo = ({ partner, onHoverStart, onHoverEnd }) => {
-  const [hovered, setHovered] = useState(false)
-
+const PartnerLogo = ({ partner }) => {
   return (
-    <div
-      className="tb-logo-wrap"
-      onMouseEnter={() => { setHovered(true); onHoverStart() }}
-      onMouseLeave={() => { setHovered(false); onHoverEnd() }}
-    >
+    <div className="tb-logo-wrap">
       <img
-        src={hovered ? partner.colorLogo : partner.monoLogo}
+        src={partner.monoLogo}
         alt={partner.name}
-        className={`tb-logo ${hovered ? 'tb-logo--hovered' : ''}`}
+        className="tb-logo tb-logo--mono"
+      />
+      <img
+        src={partner.colorLogo}
+        alt=""
+        aria-hidden="true"
+        className="tb-logo tb-logo--color"
       />
     </div>
   )
 }
 
 const TrustedBy = () => {
-  const [marqueePaused, setMarqueePaused] = useState(false)
-
   return (
     <>
       <style>{`
@@ -73,14 +70,14 @@ const TrustedBy = () => {
 
         .tb-inner {
           display: flex;
-          gap: 80px;
+          gap: clamp(28px, 6vw, 80px);
           align-items: center;
           white-space: nowrap;
           animation: tb-scroll 24s linear infinite;
           will-change: transform;
         }
 
-        .tb-inner.paused {
+        .tb-track:hover .tb-inner {
           animation-play-state: paused;
         }
 
@@ -93,23 +90,44 @@ const TrustedBy = () => {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          min-width: 200px;
+          min-width: clamp(120px, 30vw, 200px);
           cursor: default;
           overflow: visible;
+          position: relative;
         }
 
         .tb-logo {
           height: 52px;
           object-fit: contain;
-          filter: grayscale(100%) brightness(0.55);
           transition:
-            filter 0.4s cubic-bezier(0.23, 1, 0.32, 1),
-            transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            opacity 0.32s cubic-bezier(0.23, 1, 0.32, 1),
+            filter 0.32s cubic-bezier(0.23, 1, 0.32, 1),
+            transform 0.32s cubic-bezier(0.23, 1, 0.32, 1);
         }
 
-        .tb-logo--hovered {
+        .tb-logo--mono {
+          filter: grayscale(100%) brightness(0.55);
+          opacity: 1;
+        }
+
+        .tb-logo--color {
+          position: absolute;
+          inset: auto;
+          opacity: 0;
           filter: grayscale(0%) brightness(1);
-          transform: scale(1.18);
+        }
+
+        .tb-logo-wrap:hover .tb-logo--mono {
+          opacity: 0;
+        }
+
+        .tb-logo-wrap:hover .tb-logo--color {
+          opacity: 1;
+        }
+
+        .tb-logo-wrap:hover .tb-logo {
+          filter: grayscale(0%) brightness(1);
+          transform: scale(1.12);
         }
       `}</style>
 
@@ -123,14 +141,9 @@ const TrustedBy = () => {
         <p className="tb-label">Trusted by global AI innovators</p>
 
         <div className="tb-track">
-          <div className={`tb-inner ${marqueePaused ? 'paused' : ''}`}>
+          <div className="tb-inner">
             {[...partners, ...partners].map((partner, i) => (
-              <PartnerLogo
-                key={i}
-                partner={partner}
-                onHoverStart={() => setMarqueePaused(true)}
-                onHoverEnd={() => setMarqueePaused(false)}
-              />
+              <PartnerLogo key={i} partner={partner} />
             ))}
           </div>
         </div>

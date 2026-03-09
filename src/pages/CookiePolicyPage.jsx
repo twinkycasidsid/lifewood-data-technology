@@ -223,6 +223,7 @@ const CookiePolicyPage = ({ onNavigate = () => {} }) => {
           border-left: 2px solid transparent;
           border-radius: 0 8px 8px 0;
           transition: color 0.18s ease, background 0.18s ease;
+          overflow-wrap: anywhere;
         }
         .cp-toc-item:hover {
           color: #1a2e1e;
@@ -364,6 +365,19 @@ const CookiePolicyPage = ({ onNavigate = () => {} }) => {
           .cp-card { padding: 22px 20px; }
           .cp-section-header { gap: 12px; }
           .cp-hero-meta { gap: 14px; }
+          .cp-toc { padding: 10px 0 10px; }
+          .cp-toc-row {
+            flex-wrap: wrap;
+            overflow-x: visible;
+            gap: 8px;
+          }
+          .cp-toc-item {
+            max-width: none;
+            white-space: normal;
+            line-height: 1.25;
+            padding: 8px 10px;
+            font-size: 12px;
+          }
         }
 
         @media (max-width: 1024px) {
@@ -372,7 +386,8 @@ const CookiePolicyPage = ({ onNavigate = () => {} }) => {
             padding: 0 14px 64px;
           }
           .cp-toc {
-            top: 72px;
+            position: static;
+            top: auto;
             z-index: 20;
             border-right: none;
             border-bottom: 1px solid rgba(26,46,30,0.12);
@@ -387,6 +402,8 @@ const CookiePolicyPage = ({ onNavigate = () => {} }) => {
             flex-direction: row;
             gap: 8px;
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
             padding-bottom: 2px;
           }
           .cp-toc-item {
@@ -396,6 +413,10 @@ const CookiePolicyPage = ({ onNavigate = () => {} }) => {
             border-radius: 999px;
             border: 1px solid rgba(26,46,30,0.10);
             background: #fff;
+            flex: 0 0 auto;
+            max-width: min(82vw, 360px);
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
           .cp-toc-item.active {
             border-left: 1px solid rgba(26,46,30,0.10);
@@ -534,3 +555,4 @@ const CookiePolicyPage = ({ onNavigate = () => {} }) => {
 };
 
 export default CookiePolicyPage;
+

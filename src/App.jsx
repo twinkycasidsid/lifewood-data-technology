@@ -77,28 +77,38 @@ function AppContent() {
           path="/"
           element={
             <PageLayout>
-              <Hero />
-              <About />
+              <Hero onNavigate={navigateTo} />
+              <TrustedBy />
+              <About onNavigate={navigateTo} />
               <ImpactStats />
               <ESG />
-              <CTA />
+              <CTA onNavigate={navigateTo} />
             </PageLayout>
           }
         />
         <Route path="/ai-services" element={<AIServicesPage />} />
         <Route path="/ai-projects" element={<AIProjectsPage />} />
-        <Route path="/data-service" element={<DataServicePage />} />
+        <Route
+          path="/data-service"
+          element={<DataServicePage onNavigate={navigateTo} />}
+        />
         <Route
           path="/horizontal-llm-data"
-          element={<HorizontalLLMDataPage />}
+          element={<HorizontalLLMDataPage onNavigate={navigateTo} />}
         />
-        <Route path="/vertical-llm-data" element={<VerticalLLMDataPage />} />
-        <Route path="/aigc" element={<AIGCPage />} />
+        <Route
+          path="/vertical-llm-data"
+          element={<VerticalLLMDataPage onNavigate={navigateTo} />}
+        />
+        <Route path="/aigc" element={<AIGCPage onNavigate={navigateTo} />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/offices" element={<OfficesPage />} />
         <Route path="/phil-impact" element={<PhilImpactPage />} />
         <Route path="/careers" element={<CareersPage />} />
-        <Route path="/contact-us" element={<ContactUsPage />} />
+        <Route
+          path="/contact-us"
+          element={<ContactUsPage onNavigate={navigateTo} />}
+        />
         <Route path="/internal-news" element={<InternalNewsPage />} />
         <Route
           path="/get-started"

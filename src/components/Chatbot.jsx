@@ -235,11 +235,11 @@ const Chatbot = () => {
         .chatbot-window {
           position: fixed;
           bottom: 100px;
-          right: 24px;
-          width: 380px;
-          height: 600px;
+          right: clamp(12px, 2.5vw, 24px);
+          width: min(380px, calc(100vw - 24px));
+          height: min(600px, calc(100dvh - 120px));
           background: #fff;
-          border-radius: 20px;
+          border-radius: clamp(14px, 2.5vw, 20px);
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
           z-index: 1002;
           display: flex;
@@ -251,7 +251,7 @@ const Chatbot = () => {
         .chatbot-header {
           background: #046241;
           color: white;
-          padding: 20px;
+          padding: clamp(14px, 3vw, 20px);
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -285,7 +285,7 @@ const Chatbot = () => {
 
         .chatbot-messages {
           flex: 1;
-          padding: 20px;
+          padding: clamp(12px, 3vw, 20px);
           overflow-y: auto;
           display: flex;
           flex-direction: column;
@@ -342,7 +342,7 @@ const Chatbot = () => {
         }
 
         .chatbot-input-area {
-          padding: 20px;
+          padding: clamp(12px, 3vw, 20px);
           border-top: 1px solid #e5e5e5;
           background: white;
         }
@@ -413,10 +413,10 @@ const Chatbot = () => {
         }
 
         .terms-card {
-          padding: 24px;
+          padding: clamp(14px, 4vw, 24px);
           background: #f8f9fa;
           border-radius: 16px;
-          margin: 20px;
+          margin: clamp(10px, 3vw, 20px);
           text-align: center;
         }
 
@@ -457,7 +457,7 @@ const Chatbot = () => {
         }
 
         .welcome-screen {
-          padding: 24px;
+          padding: clamp(14px, 4vw, 24px);
           text-align: center;
           height: 100%;
           display: flex;
@@ -465,7 +465,7 @@ const Chatbot = () => {
         }
 
         .welcome-logo {
-          width: 120px;
+          width: clamp(90px, 26vw, 120px);
           height: auto;
           margin: 0 auto 16px;
         }
@@ -534,13 +534,13 @@ const Chatbot = () => {
         .settings-panel {
           position: absolute;
           top: 70px;
-          right: 20px;
+          right: clamp(8px, 2vw, 20px);
           background: white;
           border: 1px solid #e5e5e5;
           border-radius: 12px;
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
           padding: 16px;
-          min-width: 200px;
+          min-width: min(200px, calc(100vw - 72px));
           z-index: 1003;
         }
 
@@ -638,11 +638,11 @@ const Chatbot = () => {
         /* Mobile styles */
         @media (max-width: 768px) {
           .chatbot-window {
-            width: calc(100vw - 32px);
-            height: calc(100vh - 120px);
+            width: calc(100vw - 16px);
+            height: calc(100dvh - 100px);
             bottom: 80px;
-            right: 16px;
-            left: 16px;
+            right: 8px;
+            left: 8px;
           }
           .chatbot-floating-btn {
             bottom: 16px;

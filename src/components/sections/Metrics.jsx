@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { motion, useInView } from 'framer-motion'
 
 const stats = [
@@ -40,34 +40,10 @@ const stats = [
   },
 ]
 
-const useCounter = (target, isInView) => {
-  const [display, setDisplay] = useState(0)
-  const rafRef = useRef(null)
-
-  useEffect(() => {
-    if (!isInView) return
-    const start = performance.now()
-    const duration = 1800
-    const tick = (now) => {
-      const elapsed = now - start
-      const progress = Math.min(elapsed / duration, 1)
-      const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress)
-      setDisplay(Math.floor(eased * target))
-      if (progress < 1) rafRef.current = requestAnimationFrame(tick)
-    }
-    rafRef.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafRef.current)
-  }, [isInView, target])
-
-  return display
-}
-
 const StatCard = ({ stat, index }) => {
   const ref = useRef(null)
   const isInView = useInView(ref, { once: true, margin: '-60px' })
   const [hovered, setHovered] = useState(false)
-  const count = useCounter(stat.number, isInView)
-  const formatted = count >= 1000 ? count.toLocaleString('en-US') : String(count)
 
   return (
     <motion.div
@@ -84,7 +60,8 @@ const StatCard = ({ stat, index }) => {
       <p className={`is-card__tag is-card__tag--${stat.tagColor}`}>{stat.tag}</p>
 
       <div className="is-card__number">
-        {formatted}<span className="is-card__suffix">{stat.suffix}</span>
+        {stat.number.toLocaleString('en-US')}
+        <span className="is-card__suffix">{stat.suffix}</span>
       </div>
 
       <p className="is-card__label">{stat.label}</p>

@@ -325,6 +325,7 @@ const styles = `
     font-weight: 600;
     color: rgba(26,46,30,0.60);
     transition: color 0.18s ease, background 0.18s ease;
+    overflow-wrap: anywhere;
     line-height: 1.35;
     border-left: 2px solid transparent;
     border-radius: 0 8px 8px 0;
@@ -457,7 +458,8 @@ const styles = `
       padding: 0 20px;
     }
     .tnc-nav {
-      top: 72px;
+      position: static;
+      top: auto;
       z-index: 20;
       border-right: none;
       border-bottom: 1px solid rgba(26,46,30,0.12);
@@ -473,6 +475,8 @@ const styles = `
       display: flex;
       gap: 8px;
       overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
       padding-bottom: 2px;
     }
     .tnc-nav-item {
@@ -484,6 +488,10 @@ const styles = `
       background: #fff;
       border: 1px solid rgba(26,46,30,0.10);
       padding: 8px 12px;
+      flex: 0 0 auto;
+      max-width: min(82vw, 360px);
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .tnc-nav-item.active {
       border-left: 1px solid rgba(26,46,30,0.10);
@@ -496,6 +504,19 @@ const styles = `
   @media (max-width: 700px) {
     .tnc-header { padding: 44px 20px 40px; }
     .tnc-header-meta { gap: 14px; }
+    .tnc-nav { padding: 10px 0 10px; }
+    .tnc-nav-row {
+      flex-wrap: wrap;
+      overflow-x: visible;
+      gap: 8px;
+    }
+    .tnc-nav-item {
+      max-width: none;
+      white-space: normal;
+      line-height: 1.25;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
   }
 `;
 
@@ -612,3 +633,4 @@ export default function TermsAndConditions() {
     </>
   );
 }
+

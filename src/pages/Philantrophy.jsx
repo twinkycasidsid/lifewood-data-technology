@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   MapContainer,
   Marker,
@@ -105,15 +106,20 @@ const STYLES = `
   }
   .phil-nav-link:hover { color: var(--green-deep); }
   .phil-nav-btn {
-    font-family: var(--font); font-size: 11.5px; font-weight: 700;
-    letter-spacing: 0.1em; text-transform: uppercase;
-    padding: 10px 22px;
-    background: var(--green-deep); color: var(--white);
+    font-family: var(--font); font-size: 15px; font-weight: 700;
+    letter-spacing: 0.01em;
+    padding: 12px 28px;
+    background: #ffab00; color: #0a1a0e;
     border: none; cursor: pointer;
-    border-radius: 6px;
-    transition: background 0.2s, transform 0.2s;
+    border-radius: 999px;
+    box-shadow: 0 6px 24px rgba(255,171,0,0.32);
+    transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
   }
-  .phil-nav-btn:hover { background: var(--green-dark); transform: translateY(-1px); }
+  .phil-nav-btn:hover {
+    background: #ffc030;
+    box-shadow: 0 10px 36px rgba(255,171,0,0.52);
+    transform: translateY(-2px);
+  }
 
 
   /* ── HERO ── */
@@ -398,6 +404,7 @@ const MapViewport = ({ center, zoom }) => {
 
 const PhilantrophyPage = () => {
   useReveal();
+  const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -507,7 +514,16 @@ const PhilantrophyPage = () => {
           <a href="#" className="phil-nav-link">
             Philanthropy
           </a>
-          <button className="phil-nav-btn">Contact Us</button>
+          <button
+            className="phil-nav-btn"
+            type="button"
+            onClick={() => {
+              navigate("/contact-us");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          >
+            Contact Us
+          </button>
         </div>
       </nav>
 

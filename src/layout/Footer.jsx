@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   IconBrandLinkedin,
   IconBrandInstagram,
@@ -13,6 +13,10 @@ import {
 
 const Footer = () => {
   const navigate = useNavigate();
+  const handleInternalNavigate = (path) => {
+    navigate(path);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const footerLinks = FOOTER_LINKS;
   const internalLinks = INTERNAL_LINKS;
@@ -39,32 +43,36 @@ const Footer = () => {
           z-index: 2;
           max-width: 1280px;
           margin: 0 auto;
-          padding: 72px 48px 48px;
+          padding: clamp(40px, 7vw, 72px) clamp(16px, 5vw, 48px) clamp(28px, 5vw, 48px);
         }
         .lw-footer-grid {
           display: grid;
           grid-template-columns: 1.6fr 1fr 1fr 1fr;
-          gap: 0 48px;
+          gap: 0 clamp(16px, 4vw, 48px);
           align-items: start;
         }
         .lw-footer-brand {
           padding-right: 32px;
           border-right: 1px solid rgba(255,255,255,0.06);
         }
-        .lw-footer-img img {
-          height: 30px;
+        .lw-footer-img {
+          height: clamp(24px, 4vw, 30px);
           width: auto;
+          max-width: 100%;
           object-fit: contain;
           opacity: 0.92;
           background: transparent;
+          cursor: pointer;
+          display: block;
         }
         .lw-footer-tagline {
-          font-size: 15px;
-          font-weight: 300;
-          line-height: 1.2;
+          font-size: 12.5px;
+          font-weight: 400;
+          line-height: 1.1;
           letter-spacing: -0.02em;
           color: #fff;
-          margin: 0 0 14px;
+          margin: 12px 0 14px;
+          white-space: nowrap;
         }
         .lw-footer-social {
           display: flex;
@@ -107,7 +115,7 @@ const Footer = () => {
           flex-direction: column;
           gap: 2px;
         }
-        .lw-footer-col li a {
+        .lw-footer-col li .lw-footer-link {
           display: inline-block;
           font-size: 13.5px;
           font-weight: 500;
@@ -116,8 +124,12 @@ const Footer = () => {
           padding: 5px 0;
           transition: color 0.15s ease, padding-left 0.15s ease;
           position: relative;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          font-family: 'Manrope', sans-serif;
         }
-        .lw-footer-col li a:hover {
+        .lw-footer-col li .lw-footer-link:hover {
           color: #fff;
           padding-left: 6px;
         }
@@ -127,7 +139,7 @@ const Footer = () => {
           position: relative;
           z-index: 2;
           height: 1px;
-          margin: 0 48px;
+          margin: 0 clamp(16px, 5vw, 48px);
           background: rgba(255,255,255,0.06);
         }
         .lw-footer-bottom {
@@ -135,7 +147,7 @@ const Footer = () => {
           z-index: 2;
           max-width: 1280px;
           margin: 0 auto;
-          padding: 20px 48px 36px;
+          padding: 20px clamp(16px, 5vw, 48px) clamp(22px, 4vw, 36px);
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -151,13 +163,17 @@ const Footer = () => {
           display: flex;
           gap: 20px;
         }
-        .lw-footer-legal a {
+        .lw-footer-legal .lw-footer-link {
           font-size: 12.5px;
           color: rgba(255,255,255,0.25);
           text-decoration: none;
           transition: color 0.15s ease;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          font-family: 'Manrope', sans-serif;
         }
-        .lw-footer-legal a:hover {
+        .lw-footer-legal .lw-footer-link:hover {
           color: rgba(255,255,255,0.6);
         }
         
@@ -165,7 +181,7 @@ const Footer = () => {
         @media (max-width: 1024px) {
           .lw-footer-grid {
             grid-template-columns: 1fr 1fr;
-            gap: 40px 40px;
+            gap: 32px clamp(12px, 4vw, 40px);
           }
           .lw-footer-brand {
             grid-column: 1 / -1;
@@ -177,10 +193,8 @@ const Footer = () => {
         }
 
         @media (max-width: 600px) {
-          .lw-footer-inner { padding: 56px 24px 40px; }
-          .lw-footer-grid { grid-template-columns: 1fr 1fr; gap: 32px; }
-          .lw-footer-bottom { padding: 16px 24px 28px; flex-direction: column; align-items: flex-start; }
-          .lw-footer-bottom-sep { margin: 0 24px; }
+          .lw-footer-grid { grid-template-columns: 1fr; gap: 20px; }
+          .lw-footer-bottom { flex-direction: column; align-items: flex-start; }
         }
       `}</style>
 
@@ -194,11 +208,11 @@ const Footer = () => {
               {/* <button
                 type="button"
                 className="lw-footer-logo"
-                onClick={() => navigate("/")}
+                onClick={() => handleInternalNavigate("/")}
                 aria-label="Go to home page"
               > */}
               <img
-                onClick={() => navigate("/")}
+                onClick={() => handleInternalNavigate("/")}
                 aria-label="Go to home page"
                 className="lw-footer-img"
                 src="https://framerusercontent.com/images/Ca8ppNsvJIfTsWEuHr50gvkDow.png?scale-down-to=1024&width=2624&height=474"
@@ -207,9 +221,7 @@ const Footer = () => {
               {/* </button> */}
 
               <p className="lw-footer-tagline">
-                The world’s leading provider of
-                <br />
-                <em>AI-powered data solutions.</em>
+                The world's leading provider of <em>AI-powered data solutions.</em>
               </p>
 
               <div className="lw-footer-social">
@@ -253,7 +265,11 @@ const Footer = () => {
             </div>
 
             {/* Dynamic link columns */}
-            {Object.entries(footerLinks).map(([category, links]) => (
+            {Object.entries(footerLinks)
+              .filter(
+                ([category]) => category !== "Legal" && category !== "Connect",
+              )
+              .map(([category, links]) => (
               <div key={category} className="lw-footer-col">
                 <h4>{category}</h4>
                 <ul>
@@ -268,7 +284,15 @@ const Footer = () => {
                           {link}
                         </a>
                       ) : (
-                        <Link to={internalLinks[link] || "#"}>{link}</Link>
+                        <button
+                          type="button"
+                          className="lw-footer-link"
+                          onClick={() =>
+                            handleInternalNavigate(internalLinks[link] || "/")
+                          }
+                        >
+                          {link}
+                        </button>
                       )}
                     </li>
                   ))}
@@ -285,9 +309,27 @@ const Footer = () => {
             © 2026 Lifewood — All Rights Reserved
           </span>
           <div className="lw-footer-legal">
-            <Link to="/privacy-policy">Privacy Policy</Link>
-            <Link to="/terms-conditions">Terms of Service</Link>
-            <Link to="/cookie-policy">Cookie Policy</Link>
+            <button
+              type="button"
+              className="lw-footer-link"
+              onClick={() => handleInternalNavigate("/privacy-policy")}
+            >
+              Privacy Policy
+            </button>
+            <button
+              type="button"
+              className="lw-footer-link"
+              onClick={() => handleInternalNavigate("/terms-conditions")}
+            >
+              Terms of Service
+            </button>
+            <button
+              type="button"
+              className="lw-footer-link"
+              onClick={() => handleInternalNavigate("/cookie-policy")}
+            >
+              Cookie Policy
+            </button>
           </div>
         </div>
       </footer>
@@ -296,3 +338,6 @@ const Footer = () => {
 };
 
 export default Footer;
+
+
+
