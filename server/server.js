@@ -30,18 +30,51 @@ app.use(express.json());
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
 
+const buildFallbackReply = (input) => {
+  const text = String(input || "").toLowerCase();
+
+  if (text.includes("service") || text.includes("offer") || text.includes("ai")) {
+    return "Lifewood offers AI-powered data services, including AI data collection, annotation, validation, and enterprise AI solutions. You can view details in the What We Offer section.";
+  }
+  if (text.includes("office") || text.includes("location") || text.includes("where")) {
+    return "You can view all Lifewood office locations on the Our Offices page. Use the footer link 'View all offices' to open it directly.";
+  }
+  if (text.includes("career") || text.includes("job") || text.includes("hiring")) {
+    return "You can explore open roles on the Careers page. If a role matches your profile, apply there directly.";
+  }
+  if (
+    text.includes("philanthropy") ||
+    text.includes("impact") ||
+    text.includes("social")
+  ) {
+    return "You can find Lifewood social initiatives and programs on the Philanthropy & Impact page.";
+  }
+  if (text.includes("project") || text.includes("news")) {
+    return "You can explore AI Projects and Internal News from the AI Initiatives section in the main navigation.";
+  }
+  if (
+    text.includes("contact") ||
+    text.includes("partner") ||
+    text.includes("enquiry")
+  ) {
+    return "For partnerships or inquiries, please use the Contact Us page form and the team will respond.";
+  }
+
+  return "I am currently in fallback mode due to temporary AI service limits. I can still help with Lifewood services, offices, careers, projects, impact initiatives, and contact details.";
+};
+
 app.post("/api/chat", async (req, res) => {
   try {
-    if (!genAI) {
-      return res.status(500).json({
-        reply:
-          "Server configuration error: GEMINI_API_KEY is missing. Please check server/.env.",
-      });
-    }
-
     const { message } = req.body;
     if (!message || typeof message !== "string") {
       return res.status(400).json({ reply: "Please provide a valid message." });
+    }
+
+    if (!genAI) {
+      return res.status(200).json({
+        reply: buildFallbackReply(message),
+        mode: "fallback",
+      });
     }
 
     let text = "";
@@ -63,7 +96,7 @@ app.post("/api/chat", async (req, res) => {
       throw lastError || new Error("No response from available Gemini models.");
     }
 
-    res.json({ reply: text });
+    res.json({ reply: text, mode: "ai" });
   } catch (error) {
     console.error(error);
     const message = String(error?.message || "");
@@ -81,9 +114,9 @@ app.post("/api/chat", async (req, res) => {
     }
 
     if (lower.includes("quota") || lower.includes("rate")) {
-      return res.status(429).json({
-        reply:
-          "The AI service is currently rate-limited or out of quota. Please try again shortly.",
+      return res.status(200).json({
+        reply: buildFallbackReply(req.body?.message),
+        mode: "fallback",
       });
     }
 

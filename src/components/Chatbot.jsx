@@ -19,6 +19,37 @@ const SUGGESTIONS = [
   "I want to speak with someone.",
 ];
 
+const QUOTA_MESSAGE =
+  "The AI service is currently rate-limited or out of quota. Please try again shortly.";
+
+const getLocalFallbackReply = (input) => {
+  const text = String(input || "").toLowerCase();
+  if (text.includes("service") || text.includes("offer") || text.includes("ai")) {
+    return "Lifewood offers AI-powered data services, including AI data collection, annotation, validation, and enterprise AI solutions. You can view details in the What We Offer section.";
+  }
+  if (text.includes("office") || text.includes("location") || text.includes("where")) {
+    return "You can view all Lifewood office locations on the Our Offices page. Use the footer link 'View all offices' to open it directly.";
+  }
+  if (text.includes("career") || text.includes("job") || text.includes("hiring")) {
+    return "You can explore open roles on the Careers page. If a role matches your profile, apply there directly.";
+  }
+  if (
+    text.includes("philanthropy") ||
+    text.includes("impact") ||
+    text.includes("social")
+  ) {
+    return "You can find Lifewood social initiatives and programs on the Philanthropy & Impact page.";
+  }
+  if (
+    text.includes("contact") ||
+    text.includes("partner") ||
+    text.includes("enquiry")
+  ) {
+    return "For partnerships or inquiries, please use the Contact Us page form and the team will respond.";
+  }
+  return "I am in fallback mode right now. I can still help with Lifewood services, offices, careers, impact initiatives, and contact details.";
+};
+
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState("terms"); // terms | welcome | chat
@@ -97,38 +128,57 @@ const Chatbot = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
       });
-
-      const data = await response.json();
+      const raw = await response.text();
+      let data = null;
+      if (raw) {
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          data = null;
+        }
+      }
       if (!response.ok) {
         throw new Error(
           typeof data?.reply === "string" && data.reply.trim()
             ? data.reply
-            : "Chat API request failed",
+            : `Chat API request failed (${response.status})`,
         );
       }
+
+      if (!data) {
+        throw new Error("Chat API returned an empty response.");
+      }
+
       const reply =
         typeof data?.reply === "string" && data.reply.trim()
           ? data.reply
           : "I could not generate a response right now. Please try again.";
+      const normalizedReply =
+        reply === QUOTA_MESSAGE ? getLocalFallbackReply(message) : reply;
 
       setMessages((prev) => [
         ...(baseMessages || prev),
         {
           id: Date.now() + 2,
           role: "bot",
-          content: reply,
+          content: normalizedReply,
         },
       ]);
     } catch (error) {
+      const errorMessage =
+        error instanceof Error && error.message
+          ? error.message
+          : "I am having trouble connecting right now. Please try again in a moment.";
+      const normalizedError =
+        errorMessage === QUOTA_MESSAGE
+          ? getLocalFallbackReply(message)
+          : errorMessage;
       setMessages((prev) => [
         ...(baseMessages || prev),
         {
           id: Date.now() + 2,
           role: "bot",
-          content:
-            error instanceof Error && error.message
-              ? error.message
-              : "I am having trouble connecting right now. Please try again in a moment.",
+          content: normalizedError,
         },
       ]);
     } finally {

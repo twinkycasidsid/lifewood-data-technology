@@ -555,7 +555,7 @@ const ContactUs = ({ onNavigate = () => {} }) => {
                     </div>
                     <div className="cu-field full">
                       <label className="cu-label">Message</label>
-                      <textarea className="cu-textarea" name="message" placeholder="Tell us about your project or questionâ€¦" value={formData.message} onChange={handleChange} required />
+                      <textarea className="cu-textarea" name="message" placeholder="Tell us about your project or question…" value={formData.message} onChange={handleChange} required />
                     </div>
                   </div>
 
