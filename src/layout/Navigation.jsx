@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Phone, UserCircle2, Menu, X } from "lucide-react";
+import { Phone, Menu, X } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 // ─── Nav Data ────────────────────────────────────────────────────────────────
 const navItems = [
@@ -443,7 +443,7 @@ const Navigation = ({
             })}
           </div>
 
-          {/* Desktop CTA buttons — FIXED: Contact Us → /contact, Get Started → /login */}
+          {/* Desktop CTA button ? Book a Demo */}
           <div
             className="lw-desktop-auth"
             style={{
@@ -453,24 +453,13 @@ const Navigation = ({
               flexShrink: 0,
             }}
           >
-            {/* Contact Us → goes to contact form */}
-            <button
-              type="button"
-              className="lw-contact-btn"
-              onClick={() => navigate("/contact-us")}
-            >
-              <Phone size={14} strokeWidth={2.5} />
-              <span>Contact Us</span>
-            </button>
-
-            {/* Get Started → goes to login */}
             <button
               type="button"
               className="lw-cta-btn"
-              onClick={() => navigate("/get-started")}
+              onClick={() => navigate("/contact-us")}
             >
-              <UserCircle2 size={15} strokeWidth={2} />
-              <span>Get Started</span>
+              <Phone size={15} strokeWidth={2.5} />
+              <span>Book a Demo</span>
             </button>
           </div>
 
@@ -621,7 +610,7 @@ const Navigation = ({
           })}
         </div>
 
-        {/* Mobile auth — FIXED: Get Started → /login, Contact Us → /contact */}
+        {/* Mobile auth ? Book a Demo */}
         <div
           style={{
             marginTop: "auto",
@@ -636,22 +625,11 @@ const Navigation = ({
             className="lw-mobile-cta"
             onClick={() => {
               closeAll();
-              navigate("/get-started");
-            }}
-          >
-            <UserCircle2 size={17} strokeWidth={2} />
-            <span>Get Started</span>
-          </button>
-          <button
-            type="button"
-            className="lw-mobile-secondary"
-            onClick={() => {
-              closeAll();
               navigate("/contact-us");
             }}
           >
             <Phone size={15} strokeWidth={2.5} />
-            <span>Contact Us</span>
+            <span>Book a Demo</span>
           </button>
         </div>
           </motion.div>
