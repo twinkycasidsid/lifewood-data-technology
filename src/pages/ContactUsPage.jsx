@@ -617,7 +617,7 @@ const ContactUs = () => {
                 className="bd-btn primary"
                 onClick={() => (window.location.href = "/")}
               >
-                Back to Homepage
+                Back to Home
               </button>
             </div>
           ) : (
