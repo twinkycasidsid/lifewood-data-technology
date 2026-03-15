@@ -73,7 +73,7 @@ const TrustedBy = () => {
           gap: clamp(28px, 6vw, 80px);
           align-items: center;
           white-space: nowrap;
-          animation: tb-scroll 24s linear infinite;
+          animation: tb-scroll 20s linear infinite;
           will-change: transform;
         }
 
@@ -97,7 +97,7 @@ const TrustedBy = () => {
         }
 
         .tb-logo {
-          height: 52px;
+          height: 46px;
           object-fit: contain;
           transition:
             opacity 0.32s cubic-bezier(0.23, 1, 0.32, 1),

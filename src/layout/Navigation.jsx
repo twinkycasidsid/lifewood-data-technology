@@ -73,6 +73,10 @@ const Navigation = ({
     setOpenMobileSection(null);
     setActiveDropdown(null);
   };
+  const navigateTo = (path) => {
+    navigate(path);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const handleMouseEnter = (label, hasChildren) => {
     if (hoverTimeout) clearTimeout(hoverTimeout);
@@ -324,7 +328,7 @@ const Navigation = ({
           {/* Logo */}
           <button
             type="button"
-            onClick={() => navigate("/")}
+            onClick={() => navigateTo("/")}
             aria-label="Go to home page"
             style={{
               background: "transparent",
@@ -375,7 +379,7 @@ const Navigation = ({
                     className={`lw-nav-link ${isActive ? "active" : ""}`}
                     onClick={(e) => {
                       e.preventDefault();
-                      if (item.href) navigate(item.href);
+                      if (item.href) navigateTo(item.href);
                     }}
                   >
                     <span>{item.label}</span>
@@ -427,7 +431,7 @@ const Navigation = ({
                               className="lw-dropdown-link"
                               onClick={(e) => {
                                 e.preventDefault();
-                                navigate(child.href);
+                                navigateTo(child.href);
                                 setActiveDropdown(null);
                               }}
                             >
@@ -456,7 +460,7 @@ const Navigation = ({
             <button
               type="button"
               className="lw-cta-btn"
-              onClick={() => navigate("/contact-us")}
+              onClick={() => navigateTo("/contact-us")}
             >
               <Phone size={15} strokeWidth={2.5} />
               <span>Book a Demo</span>
@@ -548,7 +552,7 @@ const Navigation = ({
                   onClick={() => {
                     if (!hasChildren) {
                       closeAll();
-                      navigate(item.href || "/");
+                      navigateTo(item.href || "/");
                     } else setOpenMobileSection(isExpanded ? null : index);
                   }}
                 >
@@ -594,7 +598,7 @@ const Navigation = ({
                             className="lw-mobile-sublink"
                             onClick={(e) => {
                               e.preventDefault();
-                              navigate(child.href);
+                              navigateTo(child.href);
                               closeAll();
                             }}
                           >
@@ -625,7 +629,7 @@ const Navigation = ({
             className="lw-mobile-cta"
             onClick={() => {
               closeAll();
-              navigate("/contact-us");
+              navigateTo("/contact-us");
             }}
           >
             <Phone size={15} strokeWidth={2.5} />

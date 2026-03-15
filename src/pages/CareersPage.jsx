@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, useInView, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+import jobOpenings from "../data/jobs";
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
@@ -37,6 +39,7 @@ const benefits = [
   "Purpose-driven mission",
 ];
 
+
 const allTraits = [
   "Flexible",
   "Supportive",
@@ -72,7 +75,7 @@ const allTraits = [
 
 // ── Color tokens ──────────────────────────────────────────────────────────────
 const C = {
-  bg: "#f9f9f7",
+  bg: "#fdfefe",
   white: "#ffffff",
   dark: "#1a2e1e",
   darkDeep: "#0a1a0e",
@@ -305,8 +308,56 @@ const ApplyButton = ({ large = false, dark = false }) => (
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 const CareersPage = () => {
+  const navigate = useNavigate();
   const heroRef = useRef(null);
   const heroInView = useInView(heroRef, { once: true });
+  const [search, setSearch] = useState("");
+  const [workplace, setWorkplace] = useState("");
+  const [location, setLocation] = useState("");
+  const [department, setDepartment] = useState("");
+  const [workType, setWorkType] = useState("");
+
+  const workplaceOptions = Array.from(new Set(jobOpenings.map((j) => j.workplace)));
+  const locationOptions = Array.from(new Set(jobOpenings.map((j) => j.location)));
+  const departmentOptions = Array.from(new Set(jobOpenings.map((j) => j.department)));
+  const workTypeOptions = Array.from(new Set(jobOpenings.map((j) => j.workType)));
+
+  const filteredJobs = jobOpenings.filter((job) => {
+    const matchesSearch = job.title.toLowerCase().includes(search.toLowerCase());
+    const matchesWorkplace = workplace ? job.workplace === workplace : true;
+    const matchesLocation = location ? job.location === location : true;
+    const matchesDepartment = department ? job.department === department : true;
+    const matchesWorkType = workType ? job.workType === workType : true;
+    return (
+      matchesSearch &&
+      matchesWorkplace &&
+      matchesLocation &&
+      matchesDepartment &&
+      matchesWorkType
+    );
+  });
+
+  useEffect(() => {
+    if (window.location.hash === "#job-openings") {
+      const el = document.getElementById("job-openings");
+      if (el) {
+        el.scrollIntoView({ block: "start" });
+      }
+    }
+  }, []);
+
+  const pillClass = (label, kind) => {
+    if (kind === "workplace") {
+      if (label === "Remote") return "cp-job-pill cp-pill-remote";
+      if (label === "Hybrid") return "cp-job-pill cp-pill-hybrid";
+      if (label === "On-site") return "cp-job-pill cp-pill-onsite";
+    }
+    if (kind === "workType") {
+      if (label === "Contract") return "cp-job-pill cp-pill-contract";
+      if (label === "Full-time") return "cp-job-pill cp-pill-fulltime";
+    }
+    return "cp-job-pill";
+  };
 
   return (
     <main
@@ -339,12 +390,257 @@ const CareersPage = () => {
           50% { box-shadow: 0 0 0 5px rgba(232,160,32,0); }
         }
 
+        .cp-jobs-shell {
+          max-width: 1160px;
+          margin: 0 auto;
+          font-family: 'Manrope', sans-serif;
+          line-height: 1.6;
+          position: relative;
+        }
+
+        .cp-jobs-header {
+          display: grid;
+          gap: 12px;
+          text-align: center;
+          margin-bottom: 26px;
+        }
+
+        .cp-jobs-title {
+          font-size: clamp(30px, 3.8vw, 44px);
+          font-weight: 800;
+          letter-spacing: -0.01em;
+          margin: 0;
+        }
+
+        .cp-jobs-subtitle {
+          font-size: 14px;
+          color: ${C.textMuted};
+          margin: 0;
+        }
+
+        .cp-jobs-toolbar {
+          display: grid;
+          gap: 14px;
+          margin-bottom: 30px;
+          background: #fff;
+          border: 1px solid ${C.border};
+          border-radius: 18px;
+          padding: 18px;
+          box-shadow: 0 20px 44px rgba(10,26,14,0.08);
+        }
+
+        .cp-job-search {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          background: rgba(4,98,65,0.04);
+          border: 1px solid rgba(4,98,65,0.12);
+          border-radius: 999px;
+          padding: 12px 16px;
+          transition: box-shadow 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
+        }
+
+        .cp-job-search:focus-within {
+          border-color: rgba(4,98,65,0.35);
+          box-shadow: 0 0 0 4px rgba(4,98,65,0.12);
+          transform: translateY(-1px);
+        }
+
+        .cp-search-icon {
+          width: 16px;
+          height: 16px;
+          color: ${C.textLight};
+          flex-shrink: 0;
+        }
+
+        .cp-job-search input {
+          border: none;
+          outline: none;
+          width: 100%;
+          font-size: 14px;
+          color: ${C.dark};
+          background: transparent;
+        }
+
+        .cp-job-filters {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
+        }
+
+        .cp-job-filter {
+          border: 1px solid ${C.border};
+          background: #fff;
+          border-radius: 999px;
+          padding: 10px 14px;
+          font-size: 13px;
+          color: ${C.dark};
+          box-shadow: inset 0 0 0 1px rgba(4,98,65,0.03);
+          transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+        }
+
+        .cp-job-filter:focus {
+          outline: none;
+          border-color: rgba(4,98,65,0.35);
+          box-shadow: 0 10px 20px rgba(10,26,14,0.08);
+          transform: translateY(-1px);
+        }
+
+        .cp-jobs-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 18px;
+        }
+
+        .cp-job-card {
+          background: transparent;
+          border: none;
+          border-radius: 0;
+          padding: 8px 0 18px;
+          display: grid;
+          gap: 12px;
+          box-shadow: none;
+          transition: color 0.2s ease;
+          position: relative;
+        }
+
+        .cp-job-card + .cp-job-card {
+          border-top: 1px solid rgba(26,46,30,0.08);
+          padding-top: 18px;
+        }
+
+        .cp-job-card:hover .cp-job-title {
+          text-decoration: underline;
+        }
+
+        .cp-job-title {
+          font-size: 16px;
+          font-weight: 800;
+          color: ${C.green};
+          margin: 0;
+        }
+
+        .cp-job-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .cp-job-info {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 18px;
+          color: ${C.dark};
+          font-size: 13px;
+          font-weight: 600;
+        }
+
+        .cp-job-info-item {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .cp-job-desc {
+          font-size: 12.5px;
+          color: ${C.textMuted};
+          line-height: 1.7;
+        }
+
+        .cp-job-actions {
+          display: flex;
+          justify-content: flex-end;
+        }
+
+        .cp-job-btn {
+          border: none;
+          background: ${C.green};
+          color: #ffffff;
+          font-weight: 700;
+          font-size: 12px;
+          padding: 8px 16px;
+          border-radius: 999px;
+          cursor: pointer;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .cp-job-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 18px rgba(4,98,65,0.30);
+        }
+
+        .cp-job-meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          font-size: 12px;
+          color: ${C.textMuted};
+        }
+
+        .cp-job-pill {
+          padding: 5px 12px;
+          border-radius: 999px;
+          background: rgba(4,98,65,0.08);
+          color: ${C.green};
+          font-weight: 700;
+          font-size: 11px;
+        }
+
+        .cp-pill-remote { background: rgba(4,98,65,0.14); color: #045a3c; }
+        .cp-pill-hybrid { background: rgba(232,160,32,0.16); color: #a36a00; }
+        .cp-pill-onsite { background: rgba(34,86,208,0.14); color: #1c4aa8; }
+        .cp-pill-contract { background: rgba(26,46,30,0.10); color: rgba(26,46,30,0.75); }
+        .cp-pill-fulltime { background: rgba(4,98,65,0.20); color: #045a3c; }
+        .cp-pill-dept { background: rgba(232,160,32,0.12); color: #8a5b00; }
+
+        .cp-job-posted {
+          font-size: 12px;
+          color: ${C.textLight};
+        }
+
+        .cp-job-cta {
+          font-size: 12.5px;
+          font-weight: 600;
+          color: ${C.green};
+          opacity: 0;
+          transform: translateY(4px);
+          transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+
+        .cp-job-card:hover .cp-job-cta {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
+        .cp-jobs-count {
+          font-size: 12.5px;
+          color: ${C.textLight};
+          text-align: right;
+        }
+
+        .cp-jobs-section {
+          position: relative;
+          background: #fdfefe;
+        }
+
+        .cp-jobs-section::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background-image: radial-gradient(rgba(26,46,30,0.04) 1px, transparent 1px);
+          background-size: 22px 22px;
+          opacity: 0.5;
+        }
+
         @media (max-width: 1024px) {
           .cp-hero-grid     { grid-template-columns: 1fr !important; gap: 28px !important; }
           .cp-values-grid   { grid-template-columns: repeat(2,1fr) !important; }
           .cp-culture-inner { grid-template-columns: 1fr !important; gap: 36px !important; }
           .cp-traits-inner  { grid-template-columns: 1fr !important; gap: 22px !important; }
-          .cp-video-grid    { grid-template-columns: 1fr !important; }
+          .cp-job-filters   { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .cp-jobs-grid     { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
         }
         @media (max-width: 640px) {
           .cp-values-grid  { grid-template-columns: 1fr !important; }
@@ -353,6 +649,8 @@ const CareersPage = () => {
           .cp-collage-main { grid-column: 1 !important; grid-row: 1 !important; }
           .cp-collage-a    { grid-column: 1 !important; grid-row: 2 !important; }
           .cp-collage-b    { grid-column: 1 !important; grid-row: 3 !important; }
+          .cp-job-filters  { grid-template-columns: 1fr !important; }
+          .cp-jobs-grid    { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
@@ -956,116 +1254,132 @@ const CareersPage = () => {
         </div>
       </section>
 
-      {/* ── VIDEO (BALANCED SIZE) ───────────────────────────────────────── */}
+      {/* ── JOB OPENINGS ───────────────────────────────────────── */}
       <section
+        id="job-openings"
+        className="cp-jobs-section"
         style={{
           width: "100%",
-          padding: "88px clamp(20px,6vw,80px)",
+          padding: "88px clamp(20px,6vw,80px) 96px",
         }}
       >
-        <motion.div
-          initial={{ opacity: 0, y: 32 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          style={{
-            maxWidth: 1100,
-            margin: "0 auto",
-          }}
-        >
-          <div
-            style={{
-              position: "relative",
-              borderRadius: 24,
-              overflow: "hidden",
-              border: `1px solid ${C.border}`,
-              boxShadow: "0 20px 60px rgba(10,26,14,0.12)",
-              aspectRatio: "16/9",
-              background: C.darkDeep,
-            }}
-          >
-            {/* Soft overlay for depth */}
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                background:
-                  "linear-gradient(to top, rgba(10,26,14,0.45) 0%, rgba(10,26,14,0.15) 50%, transparent 75%)",
-                zIndex: 1,
-                pointerEvents: "none",
-              }}
-            />
-
-            <video
-              src="https://www.pexels.com/download/video/5439079/"
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="metadata"
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                display: "block",
-              }}
-            />
+        <div className="cp-jobs-shell">
+          <div className="cp-jobs-header">
+            <h2 className="cp-jobs-title">Job Openings</h2>
+            <p className="cp-jobs-subtitle">
+              Find a role that fits your strengths and helps power real-world AI.
+            </p>
           </div>
 
-          {/* Caption */}
-          <div
-            style={{
-              marginTop: 18,
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 14,
-            }}
-          >
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                fontFamily: "'Manrope', sans-serif",
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: C.amber,
-                background: "rgba(232,160,32,0.08)",
-                border: "1px solid rgba(232,160,32,0.20)",
-                padding: "6px 14px",
-                borderRadius: 999,
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: C.amber,
-                  animation: "cp-pulse 2s ease-in-out infinite",
-                }}
+          <div className="cp-jobs-toolbar">
+            <div className="cp-job-search">
+              <svg
+                className="cp-search-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search jobs..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
-              Life at Lifewood
-            </span>
-
-            <span
-              style={{
-                fontFamily: "'Manrope', sans-serif",
-                fontSize: 14,
-                fontWeight: 600,
-                color: C.textLight,
-              }}
-            >
-              Our people, our culture — worldwide
-            </span>
+            </div>
+            <div className="cp-job-filters">
+              <select
+                className="cp-job-filter"
+                value={workplace}
+                onChange={(e) => setWorkplace(e.target.value)}
+              >
+                <option value="">Workplace type</option>
+                {workplaceOptions.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+              <select
+                className="cp-job-filter"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              >
+                <option value="">Location</option>
+                {locationOptions.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+              <select
+                className="cp-job-filter"
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+              >
+                <option value="">Department</option>
+                {departmentOptions.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+              <select
+                className="cp-job-filter"
+                value={workType}
+                onChange={(e) => setWorkType(e.target.value)}
+              >
+                <option value="">Work type</option>
+                {workTypeOptions.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
           </div>
-        </motion.div>
+
+          <div className="cp-jobs-count">Showing {filteredJobs.length} roles</div>
+
+          <div className="cp-jobs-grid">
+            {filteredJobs.map((job, index) => (
+              <motion.div
+                key={job.title}
+                className="cp-job-card"
+                initial={{ opacity: 0, y: 14 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-40px" }}
+                transition={{ duration: 0.45, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <h3 className="cp-job-title">{job.title}</h3>
+                <div className="cp-job-tags">
+                  <span className={pillClass(job.workplace, "workplace")}>{job.workplace}</span>
+                  <span className="cp-job-pill cp-pill-dept">{job.department}</span>
+                </div>
+                <div className="cp-job-info">
+                  <span className="cp-job-info-item">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" stroke="currentColor" strokeWidth="1.8" />
+                      <circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+                    </svg>
+                    {job.location}
+                  </span>
+                  <span className="cp-job-info-item">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+                      <path d="M12 7v6l4 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                    {job.workType}
+                  </span>
+                </div>
+                <div className="cp-job-desc">{job.description}</div>
+                <div className="cp-job-actions">
+                  <button
+                    type="button"
+                    className="cp-job-btn"
+                    onClick={() => navigate(`/careers/${job.slug}`)}
+                  >
+                    View Details
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
       </section>
     </main>
   );

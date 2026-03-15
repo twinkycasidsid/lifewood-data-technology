@@ -20,6 +20,7 @@ import {
   OfficesPage,
   PhilImpactPage,
   CareersPage,
+  JobDetailPage,
   ContactUsPage,
   InternalNewsPage,
   PrivacyPolicyPage,
@@ -61,6 +62,9 @@ function AppContent() {
   const sectionTheme = getSectionTheme(location.pathname);
   const [authMode, setAuthMode] = useState("signup");
   const navigate = useNavigate();
+  const hideChrome =
+    location.pathname.startsWith("/careers/") &&
+    location.pathname !== "/careers";
 
   const navigateTo = (path) => {
     navigate(path);
@@ -69,7 +73,7 @@ function AppContent() {
 
   return (
     <div className={`app section-theme section-${sectionTheme}`}>
-      <Navigation onSetAuthMode={setAuthMode} />
+      {!hideChrome && <Navigation onSetAuthMode={setAuthMode} />}
 
       <Routes>
         {" "}
@@ -105,6 +109,7 @@ function AppContent() {
         <Route path="/offices" element={<OfficesPage />} />
         <Route path="/phil-impact" element={<PhilImpactPage />} />
         <Route path="/careers" element={<CareersPage />} />
+        <Route path="/careers/:slug" element={<JobDetailPage />} />
         <Route
           path="/contact-us"
           element={<ContactUsPage onNavigate={navigateTo} />}
@@ -131,7 +136,7 @@ function AppContent() {
         <Route path="/terms-conditions" element={<TermsConditionsPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
-      <Footer />
+      {!hideChrome && <Footer />}
       <Chatbot />
     </div>
   );
