@@ -9,6 +9,7 @@ import { getSectionTheme } from "./utils/sectionTheme";
 
 import {
   GetStartedPage,
+  AdminLoginPage,
   DashboardPage,
   AIServicesPage,
   DataServicePage,
@@ -63,13 +64,29 @@ function AppContent() {
   const [authMode, setAuthMode] = useState("signup");
   const navigate = useNavigate();
   const hideChrome =
-    location.pathname.startsWith("/careers/") &&
-    location.pathname !== "/careers";
+    (location.pathname.startsWith("/careers/") &&
+      location.pathname !== "/careers") ||
+    location.pathname === "/admin-login" ||
+    location.pathname === "/sign-in" ||
+    location.pathname === "/dashboard";
 
   const navigateTo = (path) => {
     navigate(path);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  useEffect(() => {
+    if (location.pathname !== "/dashboard") return;
+    const role =
+      localStorage.getItem("lwAuthRole") ||
+      sessionStorage.getItem("lwAuthRole");
+    const token =
+      localStorage.getItem("lwAuthToken") ||
+      sessionStorage.getItem("lwAuthToken");
+    if (!token || role !== "admin") {
+      navigate("/admin-login");
+    }
+  }, [location.pathname, navigate]);
 
   return (
     <div className={`app section-theme section-${sectionTheme}`}>
@@ -121,16 +138,18 @@ function AppContent() {
             <GetStartedPage
               authMode={authMode}
               onAuthModeChange={setAuthMode}
+              onNavigate={navigateTo}
             />
           }
         />
         <Route
           path="/sign-in"
           element={
-            <GetStartedPage authMode="signin" onAuthModeChange={setAuthMode} />
+            <AdminLoginPage onNavigate={navigateTo} />
           }
         />
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/admin-login" element={<AdminLoginPage onNavigate={navigateTo} />} />
+        <Route path="/dashboard" element={<DashboardPage onNavigate={navigateTo} />} />
         <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
         <Route path="/cookie-policy" element={<CookiePolicyPage />} />
         <Route path="/terms-conditions" element={<TermsConditionsPage />} />

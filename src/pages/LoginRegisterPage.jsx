@@ -21,19 +21,62 @@ const GetStartedPage = ({
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
 
   const switchMode = () => {
     onAuthModeChange(isSignIn ? "signup" : "signin");
     setError("");
   };
 
-  const handleSignIn = (e) => {
+  const handleSignIn = async (e) => {
     e.preventDefault();
-    if (identifier.trim().toLowerCase() === "admin1" && password === "123456") {
-      setError("");
-      onNavigate("/dashboard");
-    } else {
-      setError("Invalid credentials. Use admin1 / 123456.");
+    if (!identifier || !password) return;
+    setIsSubmitting(true);
+    setError("");
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: identifier.trim(),
+          password,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setError(payload?.error || "Login failed. Please try again.");
+        return;
+      }
+
+      const accessToken = payload?.session?.access_token || "";
+      const role = payload?.role || "user";
+
+      if (!accessToken) {
+        setError("Login failed. Please try again.");
+        return;
+      }
+
+      localStorage.setItem("lwAuthToken", accessToken);
+      localStorage.setItem("lwAuthRole", role);
+      localStorage.setItem("lwAuthUser", JSON.stringify(payload?.user || {}));
+
+      if (role === "admin") {
+        onNavigate("/dashboard");
+      } else {
+        localStorage.removeItem("lwAuthToken");
+        localStorage.removeItem("lwAuthRole");
+        localStorage.removeItem("lwAuthUser");
+        setError("Access restricted. Please contact an administrator.");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Login failed. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -380,10 +423,11 @@ const GetStartedPage = ({
                   <button
                     className="gs-submit"
                     type="submit"
-                    disabled={!identifier || !password}
+                    disabled={!identifier || !password || isSubmitting}
                     style={{ marginTop: "25px" }} // Apply margin here
                   >
-                    <LogIn size={14} strokeWidth={2.5} /> Login Account
+                    <LogIn size={14} strokeWidth={2.5} />{" "}
+                    {isSubmitting ? "Logging in..." : "Login Account"}
                   </button>
                 </motion.form>
               ) : (

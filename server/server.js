@@ -4,6 +4,13 @@ import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { fileURLToPath } from "url";
 import path from "path";
+import {
+  createUserClient,
+  supabaseAdmin,
+  supabaseAdminReady,
+  supabaseAnon,
+  supabaseConfigReady,
+} from "./supabaseClient.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +28,8 @@ app.use(
     allowedOrigin
       ? {
           origin: allowedOrigin,
+          methods: ["GET", "POST", "OPTIONS"],
+          allowedHeaders: ["Content-Type", "Authorization"],
         }
       : undefined,
   ),
@@ -29,6 +38,105 @@ app.use(express.json());
 
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
+
+const resolveAuthToken = (req) => {
+  const header = req.headers.authorization || "";
+  if (header.toLowerCase().startsWith("bearer ")) {
+    return header.slice(7).trim();
+  }
+  return "";
+};
+
+const ensureSupabaseConfigured = (res) => {
+  if (!supabaseConfigReady) {
+    res.status(500).json({
+      error:
+        "Supabase is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY in server/.env.",
+    });
+    return false;
+  }
+  return true;
+};
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    if (!ensureSupabaseConfigured(res)) return;
+
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({
+        error: "Email and password are required.",
+      });
+    }
+
+    const { data, error } = await supabaseAnon.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error || !data?.session || !data?.user) {
+      return res.status(401).json({
+        error: "Invalid credentials.",
+      });
+    }
+
+    let role = "user";
+    if (supabaseAdminReady) {
+      const { data: profileData, error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .single();
+
+      if (!profileError && profileData?.role) {
+        role = profileData.role;
+      }
+    }
+
+    return res.status(200).json({
+      session: {
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        expires_at: data.session.expires_at,
+        expires_in: data.session.expires_in,
+      },
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+      },
+      role,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      error: "Login failed. Please try again.",
+    });
+  }
+});
+
+app.post("/api/auth/logout", async (req, res) => {
+  try {
+    if (!ensureSupabaseConfigured(res)) return;
+
+    const accessToken = resolveAuthToken(req);
+    if (!accessToken) {
+      return res.status(400).json({ error: "Missing access token." });
+    }
+
+    const userClient = createUserClient(accessToken);
+    const { error } = await userClient.auth.signOut();
+
+    if (error) {
+      return res.status(500).json({ error: "Logout failed." });
+    }
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Logout failed." });
+  }
+});
+
 
 const buildFallbackReply = (input) => {
   const text = String(input || "").toLowerCase();

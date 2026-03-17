@@ -7,6 +7,8 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
   const [activeModuleIndex, setActiveModuleIndex] = useState(4)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || ''
   const [profileForm, setProfileForm] = useState({
     firstName: 'Francis',
     lastName: 'Barluado',
@@ -80,6 +82,31 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
   const activeModule = courseModules[activeModuleIndex]
   const handleProfileFieldChange = (field, value) => {
     setProfileForm((prev) => ({ ...prev, [field]: value }))
+  }
+  const handleLogout = async () => {
+    const token = localStorage.getItem('lwAuthToken') || ''
+    setIsLoggingOut(true)
+    try {
+      if (token) {
+        await fetch(`${apiBaseUrl}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+      }
+    } catch (error) {
+      console.error(error)
+    } finally {
+      localStorage.removeItem('lwAuthToken')
+      localStorage.removeItem('lwAuthRole')
+      localStorage.removeItem('lwAuthUser')
+      sessionStorage.removeItem('lwAuthToken')
+      sessionStorage.removeItem('lwAuthRole')
+      sessionStorage.removeItem('lwAuthUser')
+      setIsLoggingOut(false)
+      onNavigate('/get-started')
+    }
   }
 
   const renderDashboardOverview = () => (
@@ -528,10 +555,11 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                   className="confirm"
                   onClick={() => {
                     setIsLogoutModalOpen(false)
-                    onNavigate('/get-started')
+                    handleLogout()
                   }}
+                  disabled={isLoggingOut}
                 >
-                  Yes, Logout
+                  {isLoggingOut ? 'Logging out...' : 'Yes, Logout'}
                 </button>
               </div>
             </motion.section>

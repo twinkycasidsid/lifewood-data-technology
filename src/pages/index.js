@@ -1,4 +1,5 @@
 export { default as GetStartedPage } from './LoginRegisterPage'
+export { default as AdminLoginPage } from './AdminLoginPage'
 export { default as DashboardPage } from './DashboardPage'
 export { default as AIServicesPage } from './AIServicesPage'
 export { default as DataServicePage } from './DataServicePage'
