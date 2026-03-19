@@ -1,7 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { motion, useInView, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import jobOpenings from "../data/jobs";
+import jobs from "../data/jobs";
+import { supabase } from "../lib/supabaseClient";
+import {
+  IconMapPin,
+  IconBriefcase,
+  IconClock,
+  IconChevronRight,
+} from "@tabler/icons-react";
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
@@ -311,18 +318,77 @@ const CareersPage = () => {
   const navigate = useNavigate();
   const heroRef = useRef(null);
   const heroInView = useInView(heroRef, { once: true });
+  const normalizeJob = (data) => ({
+    ...data,
+    workType: data.work_type || data.workType || "",
+    workplace: data.workplace || "",
+    location: data.location || "",
+    department: data.department || "",
+    description: data.description || "",
+    status: data.status || "Active",
+    applicants: data.applicants_count ?? data.applicants ?? 0,
+    createdAt: data.created_at || data.createdAt || "",
+    slug: data.slug || data.id || "",
+  });
   const [search, setSearch] = useState("");
   const [workplace, setWorkplace] = useState("");
   const [location, setLocation] = useState("");
   const [department, setDepartment] = useState("");
   const [workType, setWorkType] = useState("");
+  const [jobsData, setJobsData] = useState(jobs.map(normalizeJob));
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+  const [jobsError, setJobsError] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 9;
 
-  const workplaceOptions = Array.from(new Set(jobOpenings.map((j) => j.workplace)));
-  const locationOptions = Array.from(new Set(jobOpenings.map((j) => j.location)));
-  const departmentOptions = Array.from(new Set(jobOpenings.map((j) => j.department)));
-  const workTypeOptions = Array.from(new Set(jobOpenings.map((j) => j.workType)));
+  useEffect(() => {
+    let isMounted = true;
 
-  const filteredJobs = jobOpenings.filter((job) => {
+    const loadJobs = async () => {
+      setIsLoadingJobs(true);
+      setJobsError("");
+      try {
+        const { data, error } = await supabase
+          .from("job_listings")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (error) {
+          throw error;
+        }
+
+        if (Array.isArray(data)) {
+          const normalized = data.map(normalizeJob);
+          if (isMounted) {
+            setJobsData(normalized);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        if (isMounted) {
+          setJobsError("Unable to load live job listings. Showing defaults.");
+          setJobsData(jobs.map(normalizeJob));
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingJobs(false);
+        }
+      }
+    };
+
+    loadJobs();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const workplaceOptions = Array.from(new Set(jobsData.map((j) => j.workplace))).filter(Boolean);
+  const locationOptions = Array.from(new Set(jobsData.map((j) => j.location))).filter(Boolean);
+  const departmentOptions = Array.from(new Set(jobsData.map((j) => j.department))).filter(Boolean);
+  const workTypeOptions = Array.from(new Set(jobsData.map((j) => j.workType))).filter(Boolean);
+
+  const filteredJobs = jobsData.filter((job) => {
     const matchesSearch = job.title.toLowerCase().includes(search.toLowerCase());
     const matchesWorkplace = workplace ? job.workplace === workplace : true;
     const matchesLocation = location ? job.location === location : true;
@@ -338,6 +404,13 @@ const CareersPage = () => {
   });
 
   useEffect(() => {
+    setPage(1);
+  }, [search, workplace, location, department, workType]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredJobs.length / pageSize));
+  const pagedJobs = filteredJobs.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => {
     if (window.location.hash === "#job-openings") {
       const el = document.getElementById("job-openings");
       if (el) {
@@ -346,17 +419,20 @@ const CareersPage = () => {
     }
   }, []);
 
-  const pillClass = (label, kind) => {
-    if (kind === "workplace") {
-      if (label === "Remote") return "cp-job-pill cp-pill-remote";
-      if (label === "Hybrid") return "cp-job-pill cp-pill-hybrid";
-      if (label === "On-site") return "cp-job-pill cp-pill-onsite";
-    }
-    if (kind === "workType") {
-      if (label === "Contract") return "cp-job-pill cp-pill-contract";
-      if (label === "Full-time") return "cp-job-pill cp-pill-fulltime";
-    }
-    return "cp-job-pill";
+  const stripHtml = (text) => {
+    if (!text) return "";
+    return text.replace(/<[^>]*>?/gm, "");
+  };
+
+  const formatDateShort = (value) => {
+    if (!value) return "";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return parsed.toLocaleDateString("en-US", {
+      month: "2-digit",
+      day: "2-digit",
+      year: "2-digit",
+    });
   };
 
   return (
@@ -492,6 +568,81 @@ const CareersPage = () => {
           gap: 18px;
         }
 
+        .cp-admin-card {
+          background: #ffffff;
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+        }
+
+        .cp-admin-card .admin-listing-pill {
+          padding: 5px 10px;
+          font-size: 11px;
+          gap: 5px;
+        }
+
+        .cp-admin-card .admin-listing-pill svg {
+          width: 12px;
+          height: 12px;
+        }
+
+        .cp-admin-card .admin-listing-metric strong {
+          font-size: 16px;
+        }
+
+        .cp-admin-card .admin-listing-metric span {
+          font-size: 10px;
+        }
+
+        .cp-admin-footer {
+          gap: 10px;
+          margin-top: auto;
+        }
+
+        .cp-pagination {
+          display: flex;
+          gap: 8px;
+          justify-content: center;
+          margin-top: 22px;
+        }
+
+        .cp-page-btn {
+          border-radius: 999px;
+          border: 1px solid ${C.border};
+          background: #ffffff;
+          color: ${C.dark};
+          padding: 8px 14px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        .cp-page-btn:hover:not(:disabled) {
+          border-color: rgba(4,98,65,0.35);
+          box-shadow: 0 10px 20px rgba(10,26,14,0.08);
+          transform: translateY(-1px);
+        }
+
+        .cp-page-btn.is-active {
+          background: ${C.green};
+          border-color: ${C.green};
+          color: #ffffff;
+        }
+
+        .cp-page-btn:disabled {
+          cursor: not-allowed;
+          opacity: 0.5;
+          transform: none;
+          box-shadow: none;
+        }
+
+        .cp-jobs-status {
+          margin-top: 10px;
+          font-size: 12px;
+          color: rgba(26,46,30,0.6);
+        }
+
         .cp-job-card {
           background: transparent;
           border: none;
@@ -591,6 +742,7 @@ const CareersPage = () => {
         .cp-pill-hybrid { background: rgba(232,160,32,0.16); color: #a36a00; }
         .cp-pill-onsite { background: rgba(34,86,208,0.14); color: #1c4aa8; }
         .cp-pill-contract { background: rgba(26,46,30,0.10); color: rgba(26,46,30,0.75); }
+        .cp-pill-parttime { background: rgba(255,179,71,0.16); color: #8a5a13; }
         .cp-pill-fulltime { background: rgba(4,98,65,0.20); color: #045a3c; }
         .cp-pill-dept { background: rgba(232,160,32,0.12); color: #8a5b00; }
 
@@ -1266,9 +1418,14 @@ const CareersPage = () => {
         <div className="cp-jobs-shell">
           <div className="cp-jobs-header">
             <h2 className="cp-jobs-title">Job Openings</h2>
-            <p className="cp-jobs-subtitle">
-              Find a role that fits your strengths and helps power real-world AI.
-            </p>
+            <div
+              className="cp-jobs-divider"
+              style={{
+                width: "100%",
+                height: 1,
+                background: "linear-gradient(90deg, rgba(4,98,65,0.25), rgba(4,98,65,0.04))",
+              }}
+            />
           </div>
 
           <div className="cp-jobs-toolbar">
@@ -1333,52 +1490,108 @@ const CareersPage = () => {
             </div>
           </div>
 
-          <div className="cp-jobs-count">Showing {filteredJobs.length} roles</div>
+          <div className="cp-jobs-count">
+            Showing {pagedJobs.length} of {filteredJobs.length} roles
+          </div>
+          {isLoadingJobs ? (
+            <div className="cp-jobs-status">Loading job listings...</div>
+          ) : jobsError ? (
+            <div className="cp-jobs-status">{jobsError}</div>
+          ) : null}
 
           <div className="cp-jobs-grid">
-            {filteredJobs.map((job, index) => (
-              <motion.div
-                key={job.title}
-                className="cp-job-card"
+            {pagedJobs.map((job, index) => (
+              <motion.article
+                key={job.id || job.slug || job.title}
+                className="admin-card-clickable admin-listing-card cp-admin-card"
                 initial={{ opacity: 0, y: 14 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-40px" }}
                 transition={{ duration: 0.45, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/careers/${job.slug}`)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    navigate(`/careers/${job.slug}`);
+                  }
+                }}
               >
-                <h3 className="cp-job-title">{job.title}</h3>
-                <div className="cp-job-tags">
-                  <span className={pillClass(job.workplace, "workplace")}>{job.workplace}</span>
-                  <span className="cp-job-pill cp-pill-dept">{job.department}</span>
-                </div>
-                <div className="cp-job-info">
-                  <span className="cp-job-info-item">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" stroke="currentColor" strokeWidth="1.8" />
-                      <circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.8" />
-                    </svg>
-                    {job.location}
-                  </span>
-                  <span className="cp-job-info-item">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
-                      <path d="M12 7v6l4 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    </svg>
-                    {job.workType}
+                <div className="admin-listing-head">
+                  <h3 className="admin-listing-title">{job.title}</h3>
+                  <span className={`status ${job.status.toLowerCase()}`}>
+                    {job.status}
                   </span>
                 </div>
-                <div className="cp-job-desc">{job.description}</div>
-                <div className="cp-job-actions">
+                <div className="admin-listing-tags">
+                  <span className="admin-listing-pill location">
+                    <IconMapPin size={14} />
+                    {job.location || "Location"}
+                  </span>
+                  <span className="admin-listing-pill department">
+                    <IconBriefcase size={14} />
+                    {job.department || "Department"}
+                  </span>
+                  <span className="admin-listing-pill type">
+                    <IconClock size={14} />
+                    {job.workType || "Work type"}
+                  </span>
+                </div>
+                {job.description ? (
+                  <p className="admin-listing-desc">{stripHtml(job.description)}</p>
+                ) : null}
+                <div className="admin-listing-footer cp-admin-footer">
+                  <div className="admin-listing-metric">
+                    <strong>{formatDateShort(job.createdAt)}</strong>
+                    <span>Date Posted</span>
+                  </div>
                   <button
                     type="button"
-                    className="cp-job-btn"
-                    onClick={() => navigate(`/careers/${job.slug}`)}
+                    className="admin-listing-cta"
+                    aria-label="View job details"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      navigate(`/careers/${job.slug}`);
+                    }}
                   >
-                    View Details
+                    <IconChevronRight size={20} />
                   </button>
                 </div>
-              </motion.div>
+              </motion.article>
             ))}
           </div>
+
+          {totalPages > 1 ? (
+            <div className="cp-pagination">
+              <button
+                type="button"
+                className="cp-page-btn"
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                disabled={page === 1}
+              >
+                Prev
+              </button>
+              {Array.from({ length: totalPages }, (_, idx) => (
+                <button
+                  key={`page-${idx + 1}`}
+                  type="button"
+                  className={`cp-page-btn ${page === idx + 1 ? "is-active" : ""}`}
+                  onClick={() => setPage(idx + 1)}
+                >
+                  {idx + 1}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="cp-page-btn"
+                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={page === totalPages}
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
         </div>
       </section>
     </main>

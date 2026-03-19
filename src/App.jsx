@@ -27,6 +27,7 @@ import {
   PrivacyPolicyPage,
   CookiePolicyPage,
   TermsConditionsPage,
+  PreScreeningPage,
 } from "./pages";
 import {
   Hero,
@@ -127,6 +128,7 @@ function AppContent() {
         <Route path="/phil-impact" element={<PhilImpactPage />} />
         <Route path="/careers" element={<CareersPage />} />
         <Route path="/careers/:slug" element={<JobDetailPage />} />
+        <Route path="/pre-screening" element={<PreScreeningPage />} />
         <Route
           path="/contact-us"
           element={<ContactUsPage onNavigate={navigateTo} />}

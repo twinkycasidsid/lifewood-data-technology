@@ -1,11 +1,17 @@
-import { useMemo, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import jobOpenings from "../data/jobs";
-
+import jobs from "../data/jobs";
+import { supabase } from "../lib/supabaseClient";
+import emailjs from "@emailjs/browser";
 const JobDetailPage = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [cvFileName, setCvFileName] = useState("");
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -22,16 +28,234 @@ const JobDetailPage = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const job = useMemo(
-    () => jobOpenings.find((j) => j.slug === slug),
-    [slug],
-  );
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
+    setSubmitError("");
+    setSubmitSuccess(false);
+
+    const emailTo = (formData.email || "").trim();
+    if (!emailTo) {
+      setSubmitError("Email is required.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const payload = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        gender: formData.gender,
+        age: formData.age ? Number(formData.age) : null,
+        phone: formData.phone,
+        email: emailTo,
+        position_applied: job?.title || formData.position,
+        country: formData.country,
+        current_address: formData.address,
+        job_id: job?.id || null,
+        status: "New",
+        stage: "Applied",
+        cv_url: null,
+      };
+
+      const { error } = await supabase.from("job_applications").insert(payload);
+
+      if (error) {
+        throw error;
+      }
+
+      const applicantName = `${formData.firstName} ${formData.lastName}`.trim();
+      const baseUrl = window.location.origin;
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; background:#f7f3ea; padding:32px 18px;">
+          <div style="max-width:540px; margin:0 auto; text-align:center;">
+            <img src="${baseUrl}/lifewood-logo-v2.png" alt="Lifewood" style="height:48px; margin-bottom:18px;" />
+          </div>
+          <div style="max-width:540px; margin:0 auto; background:#f3eddc; border-radius:18px; padding:26px; color:#1f2b22;">
+            <p style="font-size:16px; margin:0 0 12px;">Hi, <strong>${applicantName || 'Applicant'}</strong>!</p>
+            <p style="font-size:14px; line-height:1.6; margin:0 0 12px;">
+              Thank you for applying for the <strong>${job?.title || formData.position}</strong> at Lifewood! We're excited to move you forward in the process.
+            </p>
+            <p style="font-size:14px; line-height:1.6; margin:0 0 18px;">
+              As the next step, we'd like you to complete a short AI-powered screening interview. It should take approximately 10 minutes and can be done at your convenience.
+            </p>
+            <div style="text-align:center; margin:18px 0 16px;">
+              <a href="${screeningUrl}" style="display:inline-block; background:#f2a74b; color:#0f2c1f; text-decoration:none; padding:12px 22px; border-radius:999px; font-weight:700;">Start your screening here</a>
+            </div>
+            <p style="font-size:13px; line-height:1.6; margin:0 0 12px;">
+              Please complete it as soon as possible. Once we've reviewed your responses, we'll be in touch regarding the next steps.
+            </p>
+            <p style="font-size:13px; line-height:1.6; margin:0 0 12px;">
+              If you have any questions, feel free to contact us at hr.lifewood@gmail.com.
+            </p>
+            <p style="font-size:13px; margin:0;">Best regards,</p>
+            <p style="font-size:13px; margin:4px 0 0;">HR Team | Lifewood</p>
+          </div>
+          <div style="max-width:540px; margin:16px auto 0; text-align:center; font-size:12px; color:#5a6b60;">
+            <div style="margin-bottom:8px;">Follow us:</div>
+            <div>
+              <a href="https://www.instagram.com/" style="margin:0 6px;"><img src="${baseUrl}/instagram-logo.png" alt="Instagram" style="height:18px;" /></a>
+              <a href="https://www.facebook.com/" style="margin:0 6px;"><img src="${baseUrl}/facebook-logo.png" alt="Facebook" style="height:18px;" /></a>
+              <a href="https://www.youtube.com/" style="margin:0 6px;"><img src="${baseUrl}/youtube-logo.png" alt="YouTube" style="height:18px;" /></a>
+              <a href="https://www.linkedin.com/" style="margin:0 6px;"><img src="${baseUrl}/linkedin-logo.png" alt="LinkedIn" style="height:18px;" /></a>
+            </div>
+            <div style="margin-top:10px; font-size:11px;">(c) 2026 Lifewood - All Rights Reserved</div>
+          </div>
+        </div>
+      `;
+
+      if (emailServiceId && emailTemplateId && emailPublicKey) {
+        try {
+          await emailjs.send(
+          emailServiceId,
+          emailTemplateId,
+          {
+            to_email: emailTo,
+            applicant_name: applicantName,
+            position_name: job?.title || formData.position,
+            html_content: emailHtml,
+          },
+          emailPublicKey
+        );
+        } catch (emailError) {
+          console.error(emailError);
+          throw new Error("EmailJS send failed. Check template variables and API keys.");
+        }
+      } else {
+        throw new Error("EmailJS keys are missing. Check VITE_EMAILJS_SERVICE_ID, VITE_EMAILJS_TEMPLATE_ID, VITE_EMAILJS_PUBLIC_KEY.");
+      }
+
+      setSubmitSuccess(true);
+      setFormData((prev) => ({
+        ...prev,
+        firstName: "",
+        lastName: "",
+        gender: "",
+        age: "",
+        phone: "",
+        email: "",
+        country: "",
+        address: "",
+      }));
+    } catch (error) {
+      console.error(error);
+      setSubmitError("Unable to submit application. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const renderDescription = (text) => {
+    if (!text) return null;
+    return <div dangerouslySetInnerHTML={{ __html: text }} />;
+  };
+
+  const [job, setJob] = useState(null);
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
+  const emailServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || "";
+  const emailTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || "";
+  const emailPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || "";
+  const screeningUrl = import.meta.env.VITE_SCREENING_URL || "https://application-form-ph.vercel.app/";
+
+  const normalizeJob = (data) => {
+    if (!data) return null;
+    return {
+      ...data,
+      workType: data.work_type || data.workType || "",
+      overview: Array.isArray(data.overview) ? data.overview : [],
+      description: data.description || "",
+    };
+  };
+
+  useEffect(() => {
+    const loadJob = async () => {
+      setIsLoading(true);
+      let data = null;
+
+      if (apiBaseUrl) {
+        try {
+          const response = await fetch(`${apiBaseUrl}/api/jobs/${slug}`);
+          if (response.ok) {
+            const payload = await response.json();
+            data = payload?.data || payload || null;
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }
+      if (!data) {
+        try {
+          const { data: supaData, error } = await supabase
+            .from("job_listings")
+            .select("*")
+            .eq("slug", slug)
+            .maybeSingle();
+
+          if (!error && supaData) {
+            data = supaData;
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      if (!data) {
+        try {
+          const { data: supaDataById, error } = await supabase
+            .from("job_listings")
+            .select("*")
+            .eq("id", slug)
+            .maybeSingle();
+
+          if (!error && supaDataById) {
+            data = supaDataById;
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      if (!data) {
+        data = jobs.find((item) => item.slug === slug) || null;
+      }
+
+      setJob(normalizeJob(data));
+      setIsLoading(false);
+    };
+
+    if (slug) {
+      loadJob();
+    }
+  }, [apiBaseUrl, slug]);
 
   useEffect(() => {
     if (job?.title) {
       setFormData((prev) => ({ ...prev, position: job.title }));
     }
   }, [job]);
+
+  if (isLoading) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          padding: "40px 20px",
+          fontFamily: "'Manrope', sans-serif",
+          background: "#fdfefe",
+          color: "#1a2e1e",
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <h1 style={{ fontSize: 22, marginBottom: 8 }}>Loading job...</h1>
+          <p style={{ color: "rgba(26,46,30,0.6)" }}>Please wait a moment.</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!job) {
     return (
@@ -49,7 +273,7 @@ const JobDetailPage = () => {
         <div style={{ textAlign: "center" }}>
           <h1 style={{ fontSize: 26, marginBottom: 10 }}>Job not found</h1>
           <p style={{ color: "rgba(26,46,30,0.6)" }}>
-            The role you’re looking for may have been filled.
+            The role youre looking for may have been filled.
           </p>
           <button
             type="button"
@@ -405,14 +629,14 @@ const JobDetailPage = () => {
           {activeTab === "overview" && (
             <div className="job-section">
               <h3>Description</h3>
-              {job.overview.map((para) => (
-                <p key={para}>{para}</p>
-              ))}
+            {Array.isArray(job.overview) && job.overview.length > 0
+              ? job.overview.map((para) => <p key={para}>{para}</p>)
+              : renderDescription(job.description)}
             </div>
           )}
 
           {activeTab === "application" && (
-            <form className="job-form">
+            <form className="job-form" onSubmit={handleSubmit}>
               <div className="job-form-grid">
                 <div className="job-field">
                   <label className="job-label">First Name</label>
@@ -521,15 +745,18 @@ const JobDetailPage = () => {
                 <div className="job-field full">
                   <label className="job-label">Upload CV (PDF)</label>
                   <div className="job-upload">
-                    <input type="file" accept=".pdf" />
+                    <input type="file" accept=".pdf" onChange={(e) => { const file = e.target.files?.[0]; setCvFileName(file ? file.name : ""); }} />
                     <div className="job-upload-title">Click to upload or drag and drop</div>
                     <div className="job-upload-btn">Choose File</div>
                     <div className="job-upload-hint">PDF only (max 10MB)</div>
+                    <div className="job-upload-filename">{cvFileName ? `Selected: ${cvFileName}` : "No file selected"}</div>
                   </div>
                 </div>
               </div>
               <div className="job-form-actions">
-                <button type="submit" className="job-submit">Submit Application</button>
+                {submitError ? <div className="job-note" style={{ color: "#b42318" }}>{submitError}</div> : null}
+                {submitSuccess ? <div className="job-note" style={{ color: "#0f6d4f" }}>Application submitted.</div> : null}
+                <button type="submit" className="job-submit" disabled={isSubmitting}>{isSubmitting ? "Submitting..." : "Submit Application"}</button>
               </div>
             </form>
           )}
@@ -540,3 +767,28 @@ const JobDetailPage = () => {
 };
 
 export default JobDetailPage;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
