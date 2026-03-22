@@ -69,7 +69,8 @@ function AppContent() {
       location.pathname !== "/careers") ||
     location.pathname === "/admin-login" ||
     location.pathname === "/sign-in" ||
-    location.pathname === "/dashboard";
+    location.pathname === "/dashboard" ||
+    location.pathname === "/pre-screening";
 
   const navigateTo = (path) => {
     navigate(path);
@@ -158,7 +159,7 @@ function AppContent() {
         <Route path="*" element={<NotFound />} />
       </Routes>
       {!hideChrome && <Footer />}
-      <Chatbot />
+      {!hideChrome && <Chatbot />}
     </div>
   );
 }

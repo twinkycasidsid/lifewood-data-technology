@@ -21,7 +21,9 @@ import {
   IconDotsVertical,
   IconPlus,
 } from '@tabler/icons-react'
+import emailjs from '@emailjs/browser'
 import { supabase } from '../lib/supabaseClient'
+import { buildScreeningLink } from '../utils/screeningLink'
 
 const DashboardPage = ({ onNavigate = () => {} }) => {
   const [activePanel, setActivePanel] = useState('dashboard')
@@ -35,6 +37,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
   const [selectedListing, setSelectedListing] = useState(null)
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState(null)
+  const [isAnalyzingApplication, setIsAnalyzingApplication] = useState(false)
   const [listingForm, setListingForm] = useState({
     title: '',
     department: '',
@@ -58,11 +61,24 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
   const [listingWorkplace, setListingWorkplace] = useState('')
   const [listingWorkType, setListingWorkType] = useState('')
   const [listingStatus, setListingStatus] = useState('')
+  const [applicationRoleFilter, setApplicationRoleFilter] = useState('')
+  const [applicationStatusFilter, setApplicationStatusFilter] = useState('')
+  const [notifications, setNotifications] = useState([])
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const listingEditorRef = useRef(null)
   const editEditorRef = useRef(null)
   const listingEditorFocused = useRef(false)
   const editEditorFocused = useRef(false)
+  const knownApplicationIdsRef = useRef(new Set())
+  const hasLoadedApplicationsRef = useRef(false)
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || ''
+  const emailServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || ''
+  const emailTemplateId =
+    import.meta.env.VITE_EMAILJS_TEMPLATE_ID_FOLLOWUP ||
+    import.meta.env.VITE_EMAILJS_TEMPLATE_ID ||
+    ''
+  const emailPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || ''
+  const screeningUrl = import.meta.env.VITE_SCREENING_URL || ''
   const sidebarLogo = isSidebarCollapsed
     ? '/lifewood-logo-collapsed.png'
     : 'https://framerusercontent.com/images/Ca8ppNsvJIfTsWEuHr50gvkDow.png?scale-down-to=1024&width=2624&height=474'
@@ -118,12 +134,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
 
   const defaultJobListings = []
 
-  const defaultApplications = [
-    { name: 'Alexa Dizon', role: 'Prompt Engineer', stage: 'Interview', status: 'Shortlisted', score: '92%' },
-    { name: 'Marco Santos', role: 'QA Automation', stage: 'Screening', status: 'In Review', score: '88%' },
-    { name: 'Kiara Lim', role: 'Product Designer', stage: 'Offer', status: 'Approved', score: '96%' },
-    { name: 'Luis Navarro', role: 'Data Annotator', stage: 'Assessment', status: 'Pending', score: '79%' },
-  ]
+  const defaultApplications = []
 
   const defaultMeetings = [
     { event: 'Recruiter Sync', invitee: 'M. Dela Cruz', time: '09:00 - 09:30', status: 'Confirmed' },
@@ -160,15 +171,366 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
   const [profiles, setProfiles] = useState(defaultProfiles)
   const [systemLogs, setSystemLogs] = useState(defaultSystemLogs)
 
+  const getDaysSince = (value) => {
+    if (!value) return 0
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return 0
+    const diffMs = Date.now() - parsed.getTime()
+    return diffMs / (1000 * 60 * 60 * 24)
+  }
+
+  const resolveApplicationStatus = (application) => {
+    const explicitStatus = (application?.status || '').trim()
+    if (explicitStatus) {
+      return explicitStatus
+    }
+
+    const hasResults = Boolean(application?.preScreeningResults)
+    if (hasResults) return 'Pending Verdict'
+
+    const daysSince = getDaysSince(application?.createdAt)
+    if (daysSince >= 3) return 'Inactive Applicant'
+    return 'Pre-screening Sent'
+  }
+
+  const mapApplicationRecord = (item = {}) => {
+    const preScreeningResults = item.pre_screening_results || item.preScreeningResults
+    const createdAt = item.created_at || item.createdAt
+    const application = {
+      id: item.id,
+      name: item.name || `${item.first_name || ''} ${item.last_name || ''}`.trim(),
+      role: item.role || item.position_applied || item.job_title || item.position,
+      score: typeof item.score === 'number' ? `${item.score}%` : item.score || '--',
+      email: item.email,
+      phone: item.phone,
+      gender: item.gender,
+      age: item.age,
+      country: item.country,
+      address: item.current_address || item.address,
+      cvUrl: item.cv_url || item.cvUrl,
+      preScreeningResults,
+      aiAnalysis: item.ai_analysis || item.aiAnalysis,
+      createdAt,
+      stage: item.stage || 'Applied',
+      status: item.status || '',
+      aiRecommendation: item.ai_recommendation || item.aiRecommendation || '',
+    }
+
+    return {
+      ...application,
+      status: resolveApplicationStatus(application),
+    }
+  }
+
+  const createApplicationNotification = (application) => {
+    const now = new Date().toISOString()
+    return {
+      id: `application-${application.id || `${application.email || 'unknown'}-${Date.now()}`}`,
+      title: `New application: ${application.role || 'Unknown Role'}`,
+      description: `Candidate: ${application.name || 'Unknown applicant'}`,
+      createdAt: now,
+      applicationId: application.id,
+      read: false,
+      type: 'new-application',
+    }
+  }
+
+  const formatRelativeTime = (value) => {
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return 'just now'
+
+    const diffSeconds = Math.floor((Date.now() - parsed.getTime()) / 1000)
+    if (diffSeconds < 60) return 'just now'
+    if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`
+    if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`
+    return `${Math.floor(diffSeconds / 86400)}d ago`
+  }
+
+  const processApplications = (applicationsPayload, { emitNotifications = false } = {}) => {
+    if (!Array.isArray(applicationsPayload)) return
+
+    const mappedApplications = applicationsPayload.map((item) => mapApplicationRecord(item))
+    setApplications(mappedApplications)
+
+    const currentIds = new Set(mappedApplications.map((item) => item.id).filter(Boolean))
+    if (!hasLoadedApplicationsRef.current) {
+      hasLoadedApplicationsRef.current = true
+      knownApplicationIdsRef.current = currentIds
+      return
+    }
+
+    if (!emitNotifications) {
+      knownApplicationIdsRef.current = currentIds
+      return
+    }
+
+    const newApplications = mappedApplications.filter(
+      (item) => item.id && !knownApplicationIdsRef.current.has(item.id)
+    )
+    knownApplicationIdsRef.current = currentIds
+
+    if (!newApplications.length) return
+
+    setNotifications((prev) => [
+      ...newApplications.map((item) => createApplicationNotification(item)),
+      ...prev,
+    ].slice(0, 50))
+
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      newApplications.forEach((item) => {
+        const label = item.role || 'New role'
+        const candidate = item.name || 'Unknown applicant'
+        // Browser-level notification for quick visibility while user is on a different tab.
+        new Notification(`New application: ${label}`, {
+          body: `Candidate: ${candidate}`,
+        })
+      })
+    }
+  }
+
+  const loadApplications = async ({ emitNotifications = false } = {}) => {
+    let applicationsPayload = null
+
+    if (apiBaseUrl) {
+      try {
+        const appsRes = await fetch(`${apiBaseUrl}/api/admin/applications`)
+        if (appsRes.ok) {
+          const contentType = appsRes.headers.get('content-type') || ''
+          if (contentType.includes('application/json')) {
+            const appsData = await appsRes.json()
+            if (Array.isArray(appsData?.data)) {
+              applicationsPayload = appsData.data
+            }
+          }
+        }
+      } catch (error) {
+        console.error(error)
+      }
+    }
+
+    if (!applicationsPayload) {
+      const { data: supaApps, error } = await supabase
+        .from('job_applications')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (!error && Array.isArray(supaApps)) {
+        applicationsPayload = supaApps
+      }
+    }
+
+    processApplications(applicationsPayload, { emitNotifications })
+  }
+
+  const buildReminderEmailHtml = (application) => {
+    const applicantName = application?.name || 'Applicant'
+    const roleName = application?.role || 'the role you applied for'
+    const screeningLink = buildScreeningLink({
+      screeningUrl,
+      applicationId: application?.id,
+      email: application?.email || '',
+      applicantName,
+    })
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Lifewood - Screening Invitation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+</head>
+<body style="margin: 0; padding: 0; background-color: #e8e5df; font-family: 'Manrope', sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #e8e5df; padding: 40px 16px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="max-width: 560px; width: 100%;">
+          <tr>
+            <td align="center" style="padding-bottom: 20px;">
+              <a href="#" target="_blank" style="text-decoration: none;">
+                <img
+                  src="https://framerusercontent.com/images/BZSiFYgRc4wDUAuEybhJbZsIBQY.png?width=1519&height=429"
+                  alt="Lifewood"
+                  height="38"
+                  style="height: 38px; display: block;"
+                />
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #f0eada; border-radius: 18px; padding: 36px 44px 40px 44px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="font-size: 20px; font-weight: 700; color: #1a1a1a; padding-bottom: 18px; font-family: 'Manrope', sans-serif;">
+                    Hi, ${applicantName}!
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size: 14.5px; color: #2b2b2b; line-height: 1.75; padding-bottom: 14px; font-family: 'Manrope', sans-serif; text-align: justify;">
+                    We noticed that you haven't completed your AI-powered screening interview for the <strong>${roleName}</strong> position at Lifewood yet. We understand you may have been busy — no worries!
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size: 14.5px; color: #2b2b2b; line-height: 1.75; padding-bottom: 28px; font-family: 'Manrope', sans-serif; text-align: justify;">
+                    The interview only takes around 10 minutes and can be completed at your convenience. We'd love to keep your application moving forward, so please complete it at your earliest opportunity.
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding-bottom: 28px;">
+                    <a
+                      href="${screeningLink}"
+                      target="_blank"
+                      style="
+                        display: inline-block;
+                        text-decoration: none;
+                        color: #ffffff;
+                        background-color: #e6a020;
+                        padding: 15px 52px;
+                        border-radius: 50px;
+                        font-size: 15px;
+                        font-weight: 700;
+                        font-family: 'Manrope', sans-serif;
+                        letter-spacing: 0.2px;
+                      "
+                    >
+                      Complete your screening here
+                    </a>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size: 14.5px; color: #2b2b2b; line-height: 1.75; padding-bottom: 14px; font-family: 'Manrope', sans-serif; text-align: justify;">
+                    Please note that incomplete applications may not be considered for the next stage of the hiring process. We wouldn't want you to miss out!
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size: 14.5px; color: #2b2b2b; line-height: 1.75; padding-bottom: 22px; font-family: 'Manrope', sans-serif;">
+                    If you have any questions or need assistance, feel free to reach out to us at <strong>hr.lifewood@gmail.com</strong>.
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size: 14.5px; color: #2b2b2b; line-height: 1.9; font-family: 'Manrope', sans-serif;">
+                    Best Regards,<br />
+                    HR Team | Lifewood
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding-top: 20px;">
+              <table cellpadding="0" cellspacing="0" style="margin-bottom: 8px;">
+                <tr>
+                  <td style="font-size: 13px; color: #555555; font-family: 'Manrope', sans-serif; padding-right: 10px; vertical-align: middle;">
+                    Follow us:
+                  </td>
+                  <td style="padding: 0 4px; vertical-align: middle;">
+                    <a href="#" target="_blank" style="text-decoration: none;">
+                      <img src="https://drive.google.com/uc?export=view&id=1WoSgaL_I6qmhoPYT9Npg6ecNXpzBdXXs" alt="Instagram" width="22" height="22" style="display: block; width: 22px; height: 22px;"/>
+                    </a>
+                  </td>
+                  <td style="padding: 0 4px; vertical-align: middle;">
+                    <a href="#" target="_blank" style="text-decoration: none;">
+                      <img src="https://drive.google.com/uc?export=view&id=1RQhdSjLo0g9xKcB1T-TPLUznVXG7Qvp0" alt="Facebook" width="22" height="22" style="display: block; width: 22px; height: 22px;"/>
+                    </a>
+                  </td>
+                  <td style="padding: 0 4px; vertical-align: middle;">
+                    <a href="#" target="_blank" style="text-decoration: none;">
+                      <img src="https://drive.google.com/uc?export=view&id=10w1aGHXdFxrQcOnewpAGteJBj44P2gm6" alt="YouTube" width="22" height="22" style="display: block; width: 22px; height: 22px;"/>
+                    </a>
+                  </td>
+                  <td style="padding: 0 4px; vertical-align: middle;">
+                    <a href="#" target="_blank" style="text-decoration: none;">
+                      <img src="https://drive.google.com/uc?export=view&id=1hxyvFzkirnB6TcjFHA0dfc1KMkF8ZTNq" alt="LinkedIn" width="22" height="22" style="display: block; width: 22px; height: 22px;"/>
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="font-size: 11.5px; color: #888888; margin: 0; font-family: 'Manrope', sans-serif;">
+                (c) 2026 Lifewood - All Rights Reserved
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `
+  }
+
+  const maybeSendPreScreeningReminder = async (application) => {
+    const emailTo = (application?.email || '').trim()
+    if (!emailTo) return
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTo)) return
+    if (!emailServiceId || !emailTemplateId || !emailPublicKey) return
+
+    const hasResults = Boolean(application?.preScreeningResults)
+    if (hasResults) return
+
+    const daysSince = getDaysSince(application?.createdAt)
+    if (daysSince < 2) return
+
+    const reminderKey = `lw-pre-screening-reminder-${application?.id || emailTo}`
+    if (localStorage.getItem(reminderKey)) return
+
+    try {
+      await emailjs.send(
+        emailServiceId,
+        emailTemplateId,
+        {
+          to_email: emailTo,
+          toEmail: emailTo,
+          user_email: emailTo,
+          email: emailTo,
+          applicant_name: application?.name || 'Applicant',
+          position_name: application?.role || 'Applicant',
+          subject: `Reminder: Complete Your AI Screening for the ${application?.role || 'role'} Role`,
+          html_content: buildReminderEmailHtml(application),
+        },
+        emailPublicKey
+      )
+      localStorage.setItem(reminderKey, new Date().toISOString())
+      if (application?.id) {
+        await fetch(`${apiBaseUrl}/api/admin/applications/${application.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            status: 'Follow-up Email Sent',
+          }),
+        })
+      }
+      setApplications((prev) =>
+        prev.map((item) =>
+          item.id === application?.id
+            ? { ...item, status: 'Follow-up Email Sent' }
+            : item
+        )
+      )
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
   const loadAdminData = async () => {
     try {
-      const [listingsRes, appsRes, bookingsRes, submissionsRes, profilesRes, logsRes] = await Promise.all([
-        fetch(`${apiBaseUrl}/api/admin/listings`),
-        fetch(`${apiBaseUrl}/api/admin/applications`),
-        fetch(`${apiBaseUrl}/api/admin/bookings`),
-        fetch(`${apiBaseUrl}/api/admin/submissions`),
-        fetch(`${apiBaseUrl}/api/admin/profiles`),
-        fetch(`${apiBaseUrl}/api/admin/logs`),
+      const safeFetch = async (url) => {
+        try {
+          return await fetch(url)
+        } catch (error) {
+          console.error(error)
+          return null
+        }
+      }
+
+      const [listingsRes, bookingsRes, submissionsRes, profilesRes, logsRes] = await Promise.all([
+        safeFetch(`${apiBaseUrl}/api/admin/listings`),
+        safeFetch(`${apiBaseUrl}/api/admin/bookings`),
+        safeFetch(`${apiBaseUrl}/api/admin/submissions`),
+        safeFetch(`${apiBaseUrl}/api/admin/profiles`),
+        safeFetch(`${apiBaseUrl}/api/admin/logs`),
       ])
 
       const safeJson = async (response) => {
@@ -179,7 +541,6 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       }
 
       const listingsData = await safeJson(listingsRes)
-      const appsData = await safeJson(appsRes)
       const bookingsData = await safeJson(bookingsRes)
       const submissionsData = await safeJson(submissionsRes)
       const profilesData = await safeJson(profilesRes)
@@ -202,41 +563,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         )
       }
 
-      let applicationsPayload = Array.isArray(appsData?.data) ? appsData.data : null
-
-      if (!applicationsPayload) {
-        const { data: supaApps, error } = await supabase
-          .from('job_applications')
-          .select('*')
-          .order('created_at', { ascending: false })
-
-        if (!error && Array.isArray(supaApps)) {
-          applicationsPayload = supaApps
-        }
-      }
-
-      if (applicationsPayload) {
-        setApplications(
-          applicationsPayload.map((item) => ({
-            id: item.id,
-            name: item.name || `${item.first_name || ''} ${item.last_name || ''}`.trim(),
-            role: item.role || item.position_applied || item.job_title || item.position,
-            stage: item.stage || 'Applied',
-            status: item.score != null ? 'Pending' : (item.status || 'New'),
-            score: typeof item.score === 'number' ? `${item.score}%` : item.score || '--',
-            email: item.email,
-            phone: item.phone,
-            gender: item.gender,
-            age: item.age,
-            country: item.country,
-            address: item.current_address || item.address,
-            cvUrl: item.cv_url || item.cvUrl,
-            preScreeningResults: item.pre_screening_results || item.preScreeningResults,
-            aiAnalysis: item.ai_analysis || item.aiAnalysis,
-            createdAt: item.created_at || item.createdAt,
-          }))
-        )
-      }
+      await loadApplications({ emitNotifications: false })
 
       if (Array.isArray(bookingsData?.data)) {
         setMeetings(
@@ -289,6 +616,29 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
   }, [apiBaseUrl])
 
   useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      loadApplications({ emitNotifications: true }).catch((error) => {
+        console.error(error)
+      })
+    }, 15000)
+
+    return () => window.clearInterval(intervalId)
+  }, [apiBaseUrl])
+
+  useEffect(() => {
+    if (isNotificationOpen) {
+      setNotifications((prev) => prev.map((item) => ({ ...item, read: true })))
+    }
+  }, [isNotificationOpen])
+
+  useEffect(() => {
+    if (!applications?.length) return
+    applications.forEach((application) => {
+      maybeSendPreScreeningReminder(application)
+    })
+  }, [applications])
+
+  useEffect(() => {
     if (!isListingModalOpen) return
     if (editEditorRef.current) {
       editEditorRef.current.innerHTML = editForm.description || selectedListing?.description || ''
@@ -326,6 +676,85 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       return matchesSearch && matchesDepartment && matchesWorkplace && matchesWorkType && matchesStatus
     })
   }, [jobListings, listingDepartment, listingSearch, listingStatus, listingWorkType, listingWorkplace])
+
+  const applicationRoleOptions = useMemo(
+    () => Array.from(new Set(applications.map((item) => item.role).filter(Boolean))).sort(),
+    [applications]
+  )
+
+  const applicationStatusOptions = useMemo(
+    () => Array.from(new Set(applications.map((item) => item.status).filter(Boolean))).sort(),
+    [applications]
+  )
+
+  const filteredApplications = useMemo(
+    () =>
+      applications.filter((item) => {
+        const searchValue = listingSearch.trim().toLowerCase()
+        const matchesSearch = !searchValue || [
+          item.name,
+          item.role,
+          item.status,
+          item.email,
+          item.phone,
+          item.country,
+          item.address,
+          item.score,
+          item.stage,
+        ]
+          .filter(Boolean)
+          .some((field) => field.toString().toLowerCase().includes(searchValue))
+        const matchesRole = applicationRoleFilter ? item.role === applicationRoleFilter : true
+        const matchesStatus = applicationStatusFilter ? item.status === applicationStatusFilter : true
+        return matchesSearch && matchesRole && matchesStatus
+      }),
+    [applicationRoleFilter, applicationStatusFilter, applications, listingSearch]
+  )
+
+  const filteredMeetings = useMemo(() => {
+    const searchValue = listingSearch.trim().toLowerCase()
+    if (!searchValue) return meetings
+    return meetings.filter((item) =>
+      [item.event, item.invitee, item.time, item.status]
+        .filter(Boolean)
+        .some((field) => field.toString().toLowerCase().includes(searchValue))
+    )
+  }, [listingSearch, meetings])
+
+  const filteredSubmissions = useMemo(() => {
+    const searchValue = listingSearch.trim().toLowerCase()
+    if (!searchValue) return submissions
+    return submissions.filter((item) =>
+      [item.company, item.project, item.industry, item.status]
+        .filter(Boolean)
+        .some((field) => field.toString().toLowerCase().includes(searchValue))
+    )
+  }, [listingSearch, submissions])
+
+  const filteredProfiles = useMemo(() => {
+    const searchValue = listingSearch.trim().toLowerCase()
+    if (!searchValue) return profiles
+    return profiles.filter((item) =>
+      [item.name, item.role, item.status]
+        .filter(Boolean)
+        .some((field) => field.toString().toLowerCase().includes(searchValue))
+    )
+  }, [listingSearch, profiles])
+
+  const filteredSystemLogs = useMemo(() => {
+    const searchValue = listingSearch.trim().toLowerCase()
+    if (!searchValue) return systemLogs
+    return systemLogs.filter((item) =>
+      [item.time, item.activity, item.user]
+        .filter(Boolean)
+        .some((field) => field.toString().toLowerCase().includes(searchValue))
+    )
+  }, [listingSearch, systemLogs])
+
+  const unreadNotificationCount = useMemo(
+    () => notifications.filter((item) => !item.read).length,
+    [notifications]
+  )
 
   const handleLogout = async () => {
     const token = localStorage.getItem('lwAuthToken') || ''
@@ -373,10 +802,9 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
   const escapeCsvValue = (value) => {
     if (value === null || value === undefined) return ''
     const stringValue = typeof value === 'string' ? value : JSON.stringify(value)
-    if (/[",\n]/.test(stringValue)) {
-      return ""
-    }
-    return stringValue
+    const escapedValue = stringValue.replace(/"/g, '""')
+    if (/[",\n]/.test(escapedValue)) return `"${escapedValue}"`
+    return escapedValue
   }
 
   const downloadCsv = (filename, rows) => {
@@ -415,18 +843,28 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
     }
 
     if (panel === 'applications') {
-      downloadCsv('job-applications.csv', applications.map((item) => ({
+      downloadCsv('job-applications.csv', filteredApplications.map((item) => ({
         Name: item.name,
         Role: item.role,
-        Stage: item.stage,
+        Email: item.email,
+        Phone: item.phone,
+        Gender: item.gender,
+        Age: item.age,
+        Country: item.country,
+        Address: item.address,
         Status: item.status,
+        Stage: item.stage,
         Score: item.score,
+        ResumeURL: item.cvUrl,
+        AIAnalysis: item.aiAnalysis,
+        PreScreeningResults: item.preScreeningResults,
+        AppliedAt: item.createdAt ? new Date(item.createdAt).toISOString() : '',
       })))
       return
     }
 
     if (panel === 'bookings') {
-      downloadCsv('bookings.csv', meetings.map((item) => ({
+      downloadCsv('bookings.csv', filteredMeetings.map((item) => ({
         Event: item.event,
         Invitee: item.invitee,
         Time: item.time,
@@ -436,7 +874,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
     }
 
     if (panel === 'submissions') {
-      downloadCsv('submissions.csv', submissions.map((item) => ({
+      downloadCsv('submissions.csv', filteredSubmissions.map((item) => ({
         Company: item.company,
         Project: item.project,
         Industry: item.industry,
@@ -446,7 +884,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
     }
 
     if (panel === 'profiles') {
-      downloadCsv('profiles.csv', profiles.map((item) => ({
+      downloadCsv('profiles.csv', filteredProfiles.map((item) => ({
         Name: item.name,
         Role: item.role,
         Status: item.status,
@@ -455,7 +893,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
     }
 
     if (panel === 'settings') {
-      downloadCsv('system-logs.csv', systemLogs.map((item) => ({
+      downloadCsv('system-logs.csv', filteredSystemLogs.map((item) => ({
         Time: item.time,
         Activity: item.activity,
         User: item.user,
@@ -479,9 +917,45 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
     setListingStatus('')
   }
 
-  const openApplicationModal = (application) => {
+  const clearApplicationFilters = () => {
+    setApplicationRoleFilter('')
+    setApplicationStatusFilter('')
+  }
+
+  const openApplicationModal = async (application) => {
     setSelectedApplication(application)
     setIsApplicationModalOpen(true)
+    if (!application?.id || !apiBaseUrl) return
+
+    setIsAnalyzingApplication(true)
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/admin/applications/${application.id}/analyze`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ analyze: true }),
+      })
+      if (!response.ok) return
+      const payload = await response.json()
+      const analyzed = payload?.data
+      if (!analyzed) return
+
+      const mapped = mapApplicationRecord({
+        ...analyzed,
+        aiRecommendation: payload.aiRecommendation,
+        aiAnalysis: payload.combinedAnalysis || analyzed.ai_analysis,
+      })
+
+      setSelectedApplication(mapped)
+      setApplications((prev) =>
+        prev.map((item) => (item.id === mapped.id ? { ...item, ...mapped } : item))
+      )
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setIsAnalyzingApplication(false)
+    }
   }
 
   const applyFormatting = (targetRef, command, value = null) => {
@@ -650,7 +1124,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         </div>
         <div className="admin-dashboard-hero-actions">
           <button type="button" className="admin-pill">Live Updates</button>
-          <button type="button" className="admin-btn" onClick={() => handleExport('dashboard')}>
+          <button type="button" className="admin-btn admin-export-btn" onClick={() => handleExport('dashboard')}>
             <IconFileSpreadsheet size={16} />
             Export Snapshot
           </button>
@@ -728,30 +1202,35 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
             <button type="button" className="admin-btn ghost">View all</button>
           </div>
           <div className="admin-dashboard-alerts">
-            <div className="admin-dashboard-alert">
-              <span className="pulse" />
-              <div>
-                <b>New application: Prompt Engineer</b>
-                <small>Candidate: Alexa Dizon Unknown 2 minutes ago</small>
+            {notifications.length ? notifications.slice(0, 5).map((item) => (
+              <div key={item.id} className="admin-dashboard-alert">
+                <span className="pulse" />
+                <div>
+                  <b>{item.title}</b>
+                  <small>{item.description} {formatRelativeTime(item.createdAt)}</small>
+                </div>
+                <button
+                  type="button"
+                  className="admin-link"
+                  onClick={() => {
+                    setActivePanel('applications')
+                    setIsNotificationOpen(false)
+                    const application = applications.find((entry) => entry.id === item.applicationId)
+                    if (application) openApplicationModal(application)
+                  }}
+                >
+                  Review
+                </button>
               </div>
-              <button type="button" className="admin-link">Review</button>
-            </div>
-            <div className="admin-dashboard-alert">
-              <span className="pulse warning" />
-              <div>
-                <b>Meeting rescheduled</b>
-                <small>Client Intake moved to 14:00 Unknown 10 minutes ago</small>
+            )) : (
+              <div className="admin-dashboard-alert">
+                <span className="pulse success" />
+                <div>
+                  <b>No new alerts</b>
+                  <small>New applications and events will appear here automatically.</small>
+                </div>
               </div>
-              <button type="button" className="admin-link">Update</button>
-            </div>
-            <div className="admin-dashboard-alert">
-              <span className="pulse success" />
-              <div>
-                <b>Submission flagged as high priority</b>
-                <small>Orchid Health Unknown 45 minutes ago</small>
-              </div>
-              <button type="button" className="admin-link">Contact</button>
-            </div>
+            )}
           </div>
         </article>
       </section>
@@ -1038,17 +1517,34 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
           <h1>Job Applications</h1>
           <p>Review applicants and track hiring pipeline performance.</p>
         </div>
-        <div className="admin-panel-actions">
-          <button type="button" className="admin-btn ghost">Stage Filters</button>
-          <button type="button" className="admin-btn" onClick={() => handleExport('applications')}>Export CSV</button>
-        </div>
       </section>
-      <div className="admin-filter-row">
-        <button type="button" className="admin-pill active">All Status</button>
-        <button type="button" className="admin-pill">Shortlisted</button>
-        <button type="button" className="admin-pill">Interview</button>
-        <button type="button" className="admin-pill">Rejected</button>
-        <button type="button" className="admin-pill">Offer</button>
+      <div className="admin-listing-controls applications-controls">
+        <div className="admin-listing-filters">
+          <select
+            value={applicationRoleFilter}
+            onChange={(event) => setApplicationRoleFilter(event.target.value)}
+          >
+            <option value="">All roles</option>
+            {applicationRoleOptions.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+          <select
+            value={applicationStatusFilter}
+            onChange={(event) => setApplicationStatusFilter(event.target.value)}
+          >
+            <option value="">All statuses</option>
+            {applicationStatusOptions.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+          <button type="button" className="admin-listing-clear" onClick={clearApplicationFilters}>
+            Clear Filters
+          </button>
+        </div>
+      </div>
+      <div className="admin-listing-count">
+        Showing {filteredApplications.length} of {applications.length} applications
       </div>
       <div className="admin-table-wrap">
         <table className="admin-table">
@@ -1056,13 +1552,13 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
             <tr>
               <th>Applicant</th>
               <th>Role Applied</th>
-              <th>Stage</th>
+              <th>Status</th>
               <th>Match</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            {applications.map((applicant) => (
+            {filteredApplications.map((applicant) => (
               <tr
                 key={applicant.id || applicant.email || applicant.name}
                 className="admin-table-row"
@@ -1089,8 +1585,8 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                 </td>
                 <td>
                   <div className="admin-table-meta">
-                    <strong>{applicant.stage}</strong>
-                    <span>Stage</span>
+                    <strong>{applicant.status}</strong>
+                    <span>Status</span>
                   </div>
                 </td>
                 <td>
@@ -1128,7 +1624,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         </div>
         <div className="admin-panel-actions">
           <button type="button" className="admin-btn ghost">Sync Calendly</button>
-          <button type="button" className="admin-btn" onClick={() => handleExport('bookings')}>Export CSV</button>
+          <button type="button" className="admin-btn admin-export-btn" onClick={() => handleExport('bookings')}>Export CSV</button>
         </div>
       </section>
       <div className="admin-filter-row">
@@ -1138,7 +1634,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         <button type="button" className="admin-pill">Internal</button>
       </div>
       <section className="admin-card-grid">
-        {meetings.map((meeting) => (
+        {filteredMeetings.map((meeting) => (
           <article key={meeting.event} className="admin-card">
             <div className="admin-card-top">
               <div>
@@ -1175,7 +1671,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
           <p>Respond to potential clients and track project inquiries.</p>
         </div>
         <div className="admin-panel-actions">
-          <button type="button" className="admin-btn ghost" onClick={() => handleExport('submissions')}>
+          <button type="button" className="admin-btn admin-export-btn" onClick={() => handleExport('submissions')}>
             <IconFileSpreadsheet size={16} />
             Export Excel
           </button>
@@ -1189,7 +1685,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         <button type="button" className="admin-pill">Logistics</button>
       </div>
       <section className="admin-table">
-        {submissions.map((submission) => (
+        {filteredSubmissions.map((submission) => (
           <div key={submission.company} className="admin-table-row">
             <div>
               <h3>{submission.company}</h3>
@@ -1220,7 +1716,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         </div>
       </section>
       <section className="admin-card-grid">
-        {profiles.map((profile) => (
+        {filteredProfiles.map((profile) => (
           <article key={profile.name} className="admin-card">
             <div className="admin-card-top">
               <div>
@@ -1299,7 +1795,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
             <button type="button" className="admin-btn ghost">View Logs</button>
           </div>
           <div className="admin-log-list">
-            {systemLogs.map((log) => (
+            {filteredSystemLogs.map((log) => (
               <div key={`${log.time}-${log.activity}`} className="admin-log-item">
                 <strong>{log.time}</strong>
                 <div>
@@ -1376,11 +1872,54 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
               />
             </div>
             <div className="admin-topbar-actions">
-              <button type="button" className="admin-icon-btn" aria-label="Notifications">
-                <IconBell size={18} />
-                <span className="admin-badge">3</span>
-              </button>
-              <button type="button" className="admin-btn ghost">
+              <div className="admin-notification-wrap">
+                <button
+                  type="button"
+                  className="admin-icon-btn"
+                  aria-label="Notifications"
+                  onClick={() => {
+                    setIsNotificationOpen((prev) => !prev)
+                    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+                      Notification.requestPermission().catch(() => null)
+                    }
+                  }}
+                >
+                  <IconBell size={18} />
+                  {unreadNotificationCount ? (
+                    <span className="admin-badge">{Math.min(unreadNotificationCount, 99)}</span>
+                  ) : null}
+                </button>
+                {isNotificationOpen ? (
+                  <div className="admin-notification-dropdown">
+                    <div className="admin-notification-head">
+                      <strong>Notifications</strong>
+                      <small>{notifications.length} total</small>
+                    </div>
+                    <div className="admin-notification-list">
+                      {notifications.length ? notifications.slice(0, 8).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="admin-notification-item"
+                          onClick={() => {
+                            setActivePanel('applications')
+                            setIsNotificationOpen(false)
+                            const application = applications.find((entry) => entry.id === item.applicationId)
+                            if (application) openApplicationModal(application)
+                          }}
+                        >
+                          <b>{item.title}</b>
+                          <span>{item.description}</span>
+                          <small>{formatRelativeTime(item.createdAt)}</small>
+                        </button>
+                      )) : (
+                        <p className="admin-notification-empty">No notifications yet.</p>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              <button type="button" className="admin-btn admin-export-btn" onClick={() => handleExport(activePanel)}>
                 <IconFileSpreadsheet size={16} />
                 Export
               </button>
@@ -1625,7 +2164,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                   className="admin-btn ghost"
                   onClick={() => {
                     if (selectedApplication?.cvUrl) {
-                      window.open(selectedApplication.cvUrl, '_blank', 'noopener,noreferrer')
+                      window.location.assign(selectedApplication.cvUrl)
                     }
                   }}
                   disabled={!selectedApplication?.cvUrl}
@@ -1667,6 +2206,10 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                   Match Score
                   <input type="text" value={selectedApplication?.score || '--'} readOnly />
                 </label>
+                <label>
+                  AI Recommendation
+                  <input type="text" value={selectedApplication?.aiRecommendation || (isAnalyzingApplication ? 'Analyzing...' : '--')} readOnly />
+                </label>
               </div>
               </div>
               <div className="admin-application-scroll">
@@ -1674,7 +2217,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                   <div className="full">
                     <span className="admin-editor-label">AI Analysis</span>
                     <div className="admin-rich-editor is-readonly admin-application-note">
-                      {selectedApplication?.aiAnalysis || 'No AI analysis available yet.'}
+                      {isAnalyzingApplication ? 'Analyzing CV and pre-screening results...' : (selectedApplication?.aiAnalysis || 'No AI analysis available yet.')}
                     </div>
                   </div>
                   <div className="full">

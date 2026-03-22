@@ -3,6 +3,16 @@ import { useNavigate, useParams } from "react-router-dom";
 import jobs from "../data/jobs";
 import { supabase } from "../lib/supabaseClient";
 import emailjs from "@emailjs/browser";
+import { buildScreeningLink } from "../utils/screeningLink";
+
+const resumeBucket = import.meta.env.VITE_SUPABASE_RESUME_BUCKET || "resumes";
+
+const safeName = (value = "") =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
 const JobDetailPage = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -11,7 +21,12 @@ const JobDetailPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [isResultModalOpen, setIsResultModalOpen] = useState(false);
+  const [resultModalTitle, setResultModalTitle] = useState("");
+  const [resultModalMessage, setResultModalMessage] = useState("");
+  const [resultModalKind, setResultModalKind] = useState("success");
   const [cvFileName, setCvFileName] = useState("");
+  const [cvFile, setCvFile] = useState(null);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -42,8 +57,32 @@ const JobDetailPage = () => {
       setIsSubmitting(false);
       return;
     }
+    if (!cvFile) {
+      setSubmitError("CV upload is required.");
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
+      const fileExt = (cvFile.name.split(".").pop() || "pdf").toLowerCase();
+      const fileKey = `${Date.now()}-${safeName(formData.firstName)}-${safeName(formData.lastName)}.${fileExt}`;
+      const filePath = `applications/${fileKey}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(resumeBucket)
+        .upload(filePath, cvFile, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: cvFile.type || "application/pdf",
+        });
+
+      if (uploadError) {
+        throw new Error(`CV upload failed: ${uploadError.message}`);
+      }
+
+      const { data: publicResumeData } = supabase.storage.from(resumeBucket).getPublicUrl(filePath);
+      const cvUrl = publicResumeData?.publicUrl || null;
+
       const payload = {
         first_name: formData.firstName,
         last_name: formData.lastName,
@@ -55,18 +94,41 @@ const JobDetailPage = () => {
         country: formData.country,
         current_address: formData.address,
         job_id: job?.id || null,
-        status: "New",
+        status: "Pre-screening Sent",
         stage: "Applied",
-        cv_url: null,
+        cv_url: cvUrl,
       };
 
-      const { error } = await supabase.from("job_applications").insert(payload);
+      const submitUrl = apiBaseUrl ? `${apiBaseUrl}/api/applications` : "/api/applications";
+      const submitResponse = await fetch(submitUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      if (error) {
-        throw error;
+      const submitJson = await submitResponse.json().catch(() => ({}));
+      if (!submitResponse.ok) {
+        if (submitResponse.status === 409 || submitJson?.code === "DUPLICATE_APPLICATION") {
+          setResultModalKind("warning");
+          setResultModalTitle("Application Already Exists");
+          setResultModalMessage(
+            "You already have an existing application for this job listing. Please wait for an update via email."
+          );
+          setIsResultModalOpen(true);
+          setIsSubmitting(false);
+          return;
+        }
+        throw new Error(submitJson?.error || "Application submit failed.");
       }
+      const insertedData = submitJson?.data || null;
 
       const applicantName = `${formData.firstName} ${formData.lastName}`.trim();
+      const screeningLink = buildScreeningLink({
+        screeningUrl,
+        applicationId: insertedData?.id,
+        email: emailTo,
+        applicantName,
+      });
       const baseUrl = window.location.origin;
       const emailHtml = `
         <div style="font-family: Arial, sans-serif; background:#f7f3ea; padding:32px 18px;">
@@ -82,7 +144,7 @@ const JobDetailPage = () => {
               As the next step, we'd like you to complete a short AI-powered screening interview. It should take approximately 10 minutes and can be done at your convenience.
             </p>
             <div style="text-align:center; margin:18px 0 16px;">
-              <a href="${screeningUrl}" style="display:inline-block; background:#f2a74b; color:#0f2c1f; text-decoration:none; padding:12px 22px; border-radius:999px; font-weight:700;">Start your screening here</a>
+              <a href="${screeningLink}" style="display:inline-block; background:#f2a74b; color:#0f2c1f; text-decoration:none; padding:12px 22px; border-radius:999px; font-weight:700;">Start your screening here</a>
             </div>
             <p style="font-size:13px; line-height:1.6; margin:0 0 12px;">
               Please complete it as soon as possible. Once we've reviewed your responses, we'll be in touch regarding the next steps.
@@ -124,7 +186,7 @@ const JobDetailPage = () => {
           throw new Error("EmailJS send failed. Check template variables and API keys.");
         }
       } else {
-        throw new Error("EmailJS keys are missing. Check VITE_EMAILJS_SERVICE_ID, VITE_EMAILJS_TEMPLATE_ID, VITE_EMAILJS_PUBLIC_KEY.");
+        throw new Error("EmailJS keys are missing. Check VITE_EMAILJS_SERVICE_ID, VITE_EMAILJS_TEMPLATE_ID_PRESCREENING (or VITE_EMAILJS_TEMPLATE_ID), and VITE_EMAILJS_PUBLIC_KEY.");
       }
 
       setSubmitSuccess(true);
@@ -139,9 +201,22 @@ const JobDetailPage = () => {
         country: "",
         address: "",
       }));
+      setCvFile(null);
+      setCvFileName("");
+      setResultModalKind("success");
+      setResultModalTitle("Application Submitted");
+      setResultModalMessage(
+        "Your application has been submitted successfully. Please check your email for updates and pre-screening instructions."
+      );
+      setIsResultModalOpen(true);
     } catch (error) {
       console.error(error);
-      setSubmitError("Unable to submit application. Please try again.");
+      const message = String(error?.message || "");
+      if (message.toLowerCase().includes("bucket")) {
+        setSubmitError(`Resume upload failed. Please create Supabase storage bucket "${resumeBucket}" and retry.`);
+      } else {
+        setSubmitError(message || "Unable to submit application. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -155,9 +230,12 @@ const JobDetailPage = () => {
   const [job, setJob] = useState(null);
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
   const emailServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || "";
-  const emailTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || "";
+  const emailTemplateId =
+    import.meta.env.VITE_EMAILJS_TEMPLATE_ID_PRESCREENING ||
+    import.meta.env.VITE_EMAILJS_TEMPLATE_ID ||
+    "";
   const emailPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || "";
-  const screeningUrl = import.meta.env.VITE_SCREENING_URL || "https://application-form-ph.vercel.app/";
+  const screeningUrl = import.meta.env.VITE_SCREENING_URL || "";
 
   const normalizeJob = (data) => {
     if (!data) return null;
@@ -579,6 +657,53 @@ const JobDetailPage = () => {
           transform: translateY(-1px);
           box-shadow: 0 12px 24px rgba(4,98,65,0.35);
         }
+        .job-result-modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(8, 14, 11, 0.48);
+          display: grid;
+          place-items: center;
+          z-index: 1000;
+          padding: 16px;
+        }
+        .job-result-modal {
+          width: min(480px, 100%);
+          background: #ffffff;
+          border-radius: 16px;
+          border: 1px solid rgba(26,46,30,0.12);
+          box-shadow: 0 26px 44px rgba(10,26,14,0.24);
+          padding: 18px;
+          display: grid;
+          gap: 10px;
+        }
+        .job-result-modal h3 {
+          margin: 0;
+          font-size: 20px;
+          color: #112b1d;
+        }
+        .job-result-modal p {
+          margin: 0;
+          font-size: 14px;
+          color: rgba(26,46,30,0.75);
+          line-height: 1.6;
+        }
+        .job-result-modal.warning h3 {
+          color: #8a4a0d;
+        }
+        .job-result-actions {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 8px;
+        }
+        .job-result-actions button {
+          border: none;
+          border-radius: 999px;
+          padding: 10px 16px;
+          font-weight: 700;
+          cursor: pointer;
+          background: #046241;
+          color: #fff;
+        }
         @media (max-width: 700px) {
           .job-form-grid { grid-template-columns: 1fr; }
         }
@@ -745,7 +870,16 @@ const JobDetailPage = () => {
                 <div className="job-field full">
                   <label className="job-label">Upload CV (PDF)</label>
                   <div className="job-upload">
-                    <input type="file" accept=".pdf" onChange={(e) => { const file = e.target.files?.[0]; setCvFileName(file ? file.name : ""); }} />
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      required
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setCvFile(file);
+                        setCvFileName(file ? file.name : "");
+                      }}
+                    />
                     <div className="job-upload-title">Click to upload or drag and drop</div>
                     <div className="job-upload-btn">Choose File</div>
                     <div className="job-upload-hint">PDF only (max 10MB)</div>
@@ -762,6 +896,25 @@ const JobDetailPage = () => {
           )}
         </div>
       </div>
+      {isResultModalOpen ? (
+        <div className="job-result-modal-overlay" onClick={() => setIsResultModalOpen(false)}>
+          <div
+            className={`job-result-modal ${resultModalKind === "warning" ? "warning" : ""}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3>{resultModalTitle}</h3>
+            <p>{resultModalMessage}</p>
+            {resultModalKind === "success" ? (
+              <p style={{ fontSize: 13 }}>
+                Tip: your pre-screening link was sent by email. Complete it to move forward in the hiring process.
+              </p>
+            ) : null}
+            <div className="job-result-actions">
+              <button type="button" onClick={() => setIsResultModalOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 };

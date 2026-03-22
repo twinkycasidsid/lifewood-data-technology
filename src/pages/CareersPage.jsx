@@ -509,6 +509,8 @@ const CareersPage = () => {
           display: flex;
           align-items: center;
           gap: 10px;
+          width: 100%;
+          min-width: 0;
           background: rgba(4,98,65,0.04);
           border: 1px solid rgba(4,98,65,0.12);
           border-radius: 999px;
@@ -795,6 +797,11 @@ const CareersPage = () => {
           .cp-jobs-grid     { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
         }
         @media (max-width: 640px) {
+          .cp-jobs-toolbar { padding: 14px !important; gap: 10px !important; }
+          .cp-job-search {
+            border-radius: 14px !important;
+            padding: 10px 12px !important;
+          }
           .cp-values-grid  { grid-template-columns: 1fr !important; }
           .cp-benefits-grid{ grid-template-columns: 1fr !important; }
           .cp-collage      { grid-template-rows: 200px 150px 150px !important; grid-template-columns: 1fr !important; }
