@@ -1,16 +1,69 @@
-# React + Vite
+# Lifewood Website Project
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Env Setup
 
-Currently, two official plugins are available:
+Use separate environments for frontend local development, Vercel production, and Railway backend.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Frontend local:
 
-## React Compiler
+1. Copy [.env.example](./.env.example) to `.env`
+2. Fill in the real values
+3. For local backend development, use:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```env
+VITE_API_BASE_URL=http://localhost:5000
+VITE_SCREENING_URL=http://localhost:5173/pre-screening
+```
 
-## Expanding the ESLint configuration
+4. For local frontend against deployed Railway backend, use:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```env
+VITE_API_BASE_URL=https://your-railway-domain.up.railway.app
+VITE_SCREENING_URL=http://localhost:5173/pre-screening
+```
+
+Vercel production:
+
+- Do not upload `.env`
+- Set these only in Vercel Environment Variables:
+
+```env
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+VITE_EMAILJS_SERVICE_ID=...
+VITE_EMAILJS_PUBLIC_KEY=...
+VITE_EMAILJS_TEMPLATE_ID_PRESCREENING=...
+VITE_EMAILJS_TEMPLATE_ID_FOLLOWUP=...
+VITE_API_BASE_URL=https://your-railway-domain.up.railway.app
+VITE_SCREENING_URL=https://lifewood-global.vercel.app/pre-screening
+VITE_SUPABASE_RESUME_BUCKET=resumes
+```
+
+Railway backend:
+
+- Do not use `VITE_` variables
+- Set these only in Railway Variables:
+
+```env
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.0-flash
+SUPABASE_URL=...
+SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+FRONTEND_ORIGIN=https://lifewood-global.vercel.app
+PORT=5000
+```
+
+## Run Locally
+
+Frontend:
+
+```bash
+npm run dev
+```
+
+Backend:
+
+```bash
+npm run server
+```
