@@ -19,15 +19,25 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5000;
-const allowedOrigin = process.env.FRONTEND_ORIGIN || "";
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 const configuredModel = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 const modelFallbacks = [configuredModel, "gemini-2.0-flash-lite"];
 
 app.use(
   cors(
-    allowedOrigin
+    allowedOrigins.length
       ? {
-          origin: allowedOrigin,
+          origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin)) {
+              callback(null, true);
+              return;
+            }
+
+            callback(new Error("Not allowed by CORS"));
+          },
           methods: ["GET", "POST", "PATCH", "OPTIONS"],
           allowedHeaders: ["Content-Type", "Authorization"],
         }
