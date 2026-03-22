@@ -19,10 +19,17 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5000;
-const allowedOrigins = (process.env.FRONTEND_ORIGIN || "")
+const configuredOrigins = (process.env.FRONTEND_ORIGIN || "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
+const allowedOrigins = Array.from(
+  new Set([
+    "https://lifewood-global.vercel.app",
+    "http://localhost:5173",
+    ...configuredOrigins,
+  ]),
+);
 const configuredModel = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 const modelFallbacks = [configuredModel, "gemini-2.0-flash-lite"];
 
@@ -36,7 +43,7 @@ app.use(
               return;
             }
 
-            callback(new Error("Not allowed by CORS"));
+            callback(null, false);
           },
           methods: ["GET", "POST", "PATCH", "OPTIONS"],
           allowedHeaders: ["Content-Type", "Authorization"],
