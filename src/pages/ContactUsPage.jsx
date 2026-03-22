@@ -1,6 +1,13 @@
 import { useMemo, useState, useEffect } from "react";
-import { CheckCircle } from "lucide-react";
-import { supabase } from "../lib/supabaseClient";
+import {
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle,
+  MessageCircle,
+  Send,
+} from "lucide-react";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || "";
 
 const partners = [
   { name: "Ancestry", logo: "/partners/ancestry-1.png" },
@@ -295,13 +302,41 @@ const DemoStep3 = () => {
   );
 };
 
+const modeOptions = [
+  {
+    id: "demo",
+    icon: CalendarDays,
+    title: "Continue with Book a Demo",
+    description:
+      "Talk to our team and explore how Lifewood can support your AI data pipeline.",
+  },
+  {
+    id: "contact",
+    icon: MessageCircle,
+    title: "Not ready to book a demo?",
+    description:
+      "Send us an inquiry instead and we’ll get back to you within 24 hours.",
+  },
+];
+
 const ContactUs = () => {
+  const [mode, setMode] = useState(null);
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [lastSubmitAt, setLastSubmitAt] = useState(0);
+  const [contactSubmitted, setContactSubmitted] = useState(false);
+  const [contactErrors, setContactErrors] = useState({});
+  const [contactSubmitError, setContactSubmitError] = useState("");
+  const [contactIsSubmitting, setContactIsSubmitting] = useState(false);
+  const [contactForm, setContactForm] = useState({
+    fullName: "",
+    email: "",
+    inquiryType: "",
+    message: "",
+  });
   const [formData, setFormData] = useState({
     fullName: "",
     workEmail: "",
@@ -335,6 +370,12 @@ const ContactUs = () => {
   ];
   const allowedDataTypes = ["Image", "Text", "Audio", "Video", "Multimodal"];
   const allowedTimelines = ["ASAP", "1-3 months", "3-6 months", "6+ months"];
+  const allowedInquiryTypes = [
+    "General Inquiry",
+    "Partnership",
+    "Support",
+    "Sales Question",
+  ];
 
   const sanitizeText = (value) => {
     if (!value) return "";
@@ -444,6 +485,43 @@ const ContactUs = () => {
     });
   };
 
+  const setModeWithUrl = (nextMode) => {
+    setMode(nextMode);
+    const nextUrl = nextMode ? `/contact-us?mode=${nextMode}` : "/contact-us";
+    window.history.replaceState({}, "", nextUrl);
+  };
+
+  const validateContactForm = (data) => {
+    const errors = {};
+    const fullName = normalizeName(data.fullName);
+    if (!fullName || fullName.length < 2 || fullName.length > 80) {
+      errors.fullName = "Enter a valid full name (2-80 letters).";
+    }
+    const email = normalizeEmail(data.email);
+    if (!email || !isValidEmail(email)) {
+      errors.email = "Enter a valid email address.";
+    }
+    if (!allowedInquiryTypes.includes(data.inquiryType)) {
+      errors.inquiryType = "Select a valid inquiry type.";
+    }
+    const message = normalizeDescription(data.message);
+    if (!message || message.length < 20) {
+      errors.message = "Provide at least 20 characters.";
+    }
+    return errors;
+  };
+
+  const setContactField = (name, value) => {
+    setContactForm((prev) => {
+      const next = { ...prev };
+      if (name === "fullName") next.fullName = normalizeName(value);
+      else if (name === "email") next.email = normalizeEmail(value);
+      else if (name === "message") next.message = normalizeDescription(value);
+      else next[name] = sanitizeText(value);
+      return next;
+    });
+  };
+
   const stepValidity = useMemo(() => {
     const hasEmail = formData.workEmail.includes("@");
     return {
@@ -498,21 +576,34 @@ const ContactUs = () => {
     setSubmitError("");
     setIsSubmitting(true);
     setLastSubmitAt(now);
-    const payload = {
-      full_name: normalizeName(formData.fullName),
-      work_email: normalizeEmail(formData.workEmail),
-      company_name: normalizeCompany(formData.companyName),
-      company_website: normalizeUrl(formData.companyWebsite),
-      industry: formData.industry,
-      company_size: formData.companySize,
-      project_type: formData.projectType,
-      data_type: formData.dataType,
-      dataset_size: normalizeDataset(formData.datasetSize),
-      timeline: formData.timeline,
-      project_description: normalizeDescription(formData.projectDescription),
-    };
-    const { error } = await supabase.from("contact_submissions").insert(payload);
-    if (error) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/contact-submissions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullName: normalizeName(formData.fullName),
+          workEmail: normalizeEmail(formData.workEmail),
+          companyName: normalizeCompany(formData.companyName),
+          companyWebsite: normalizeUrl(formData.companyWebsite),
+          industry: formData.industry,
+          companySize: formData.companySize,
+          projectType: formData.projectType,
+          dataType: formData.dataType,
+          datasetSize: normalizeDataset(formData.datasetSize),
+          timeline: formData.timeline,
+          projectDescription: normalizeDescription(formData.projectDescription),
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setSubmitError(result?.error || "Something went wrong. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+    } catch (_error) {
       setSubmitError("Something went wrong. Please try again.");
       setIsSubmitting(false);
       return;
@@ -521,8 +612,45 @@ const ContactUs = () => {
     setIsSubmitting(false);
   };
 
+  const handleContactSubmit = async (event) => {
+    event.preventDefault();
+    if (contactIsSubmitting) return;
+    const errors = validateContactForm(contactForm);
+    setContactErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    setContactSubmitError("");
+    setContactIsSubmitting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inquiries`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullName: normalizeName(contactForm.fullName),
+          email: normalizeEmail(contactForm.email),
+          inquiryType: contactForm.inquiryType,
+          message: normalizeDescription(contactForm.message),
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setContactSubmitError(result?.error || "Something went wrong. Please try again.");
+        setContactIsSubmitting(false);
+        return;
+      }
+
+      setContactSubmitted(true);
+      setContactIsSubmitting(false);
+    } catch (_error) {
+      setContactSubmitError("Something went wrong. Please try again.");
+      setContactIsSubmitting(false);
+    }
+  };
+
   return (
-    <main className="bd-root">
+    <main className={`bd-root${!mode ? " bd-root-compact" : ""}`}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
 
@@ -536,10 +664,181 @@ const ContactUs = () => {
           padding-bottom: 48px;
         }
 
+        .bd-root.bd-root-compact {
+          min-height: calc(100vh - 72px);
+          display: flex;
+          align-items: center;
+          padding-top: 48px;
+          padding-bottom: 48px;
+        }
+
         .bd-shell {
           max-width: 1180px;
           margin: 0 auto;
           padding: 32px 24px 40px;
+        }
+
+        .bd-mode-shell {
+          max-width: 1180px;
+          width: 100%;
+          margin: 0 auto;
+          padding: 0 24px;
+        }
+
+        .bd-mode-header {
+          display: grid;
+          gap: 10px;
+          justify-items: start;
+          text-align: left;
+        }
+
+        .bd-mode-header h1 {
+          margin: 0;
+          font-size: clamp(2rem, 4vw, 3.4rem);
+          line-height: 0.95;
+          letter-spacing: -0.03em;
+          color: #f5faf8;
+        }
+
+        .bd-mode-header p {
+          margin: 0;
+          max-width: 46ch;
+          font-size: 15px;
+          line-height: 1.6;
+          color: rgba(244, 250, 247, 0.82);
+        }
+
+        .bd-choice-stack {
+          display: grid;
+          gap: 14px;
+        }
+
+        .bd-choice-layout {
+          align-items: start;
+        }
+
+        .bd-choice-layout .bd-panel,
+        .bd-choice-layout .bd-form-card {
+          min-height: auto;
+        }
+
+        .bd-choice-card {
+          width: 100%;
+          border: 1px solid rgba(18, 38, 32, 0.08);
+          border-radius: 24px;
+          padding: 0;
+          background:
+            linear-gradient(90deg, rgba(255, 179, 71, 0.16) 0, rgba(255, 179, 71, 0.16) 10px, transparent 10px),
+            linear-gradient(145deg, rgba(255, 255, 255, 0.96) 0%, rgba(246, 249, 247, 0.92) 100%);
+          cursor: pointer;
+          transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+          box-shadow: 0 16px 34px rgba(12, 29, 20, 0.08);
+          text-align: left;
+          overflow: hidden;
+        }
+
+        .bd-choice-card:hover,
+        .bd-choice-card:focus-visible {
+          transform: translateY(-3px);
+          border-color: rgba(255, 179, 71, 0.45);
+          box-shadow: 0 24px 44px rgba(12, 29, 20, 0.14);
+          outline: none;
+        }
+
+        .bd-choice-card-head {
+          display: flex;
+          align-items: flex-start;
+          gap: 16px;
+          padding: 18px 20px 18px 24px;
+        }
+
+        .bd-mode-icon {
+          width: 46px;
+          height: 46px;
+          border-radius: 14px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(145deg, rgba(28, 61, 43, 0.1), rgba(28, 61, 43, 0.18));
+          color: #1c3d2b;
+          flex-shrink: 0;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+        }
+
+        .bd-mode-icon svg {
+          width: 24px;
+          height: 24px;
+        }
+
+        .bd-choice-copy {
+          display: grid;
+          gap: 6px;
+          width: 100%;
+        }
+
+        .bd-choice-card h2 {
+          margin: 0;
+          font-size: 1.125rem;
+          font-weight: 600;
+          color: #122620;
+        }
+
+        .bd-choice-card p {
+          margin: 0;
+          font-size: 0.95rem;
+          line-height: 1.6;
+          color: rgba(18, 38, 32, 0.72);
+        }
+
+        .bd-choice-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 8px;
+          font-size: 13px;
+          font-weight: 700;
+          color: #1c3d2b;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+        }
+
+        .bd-choice-meta {
+          display: inline-flex;
+          align-items: center;
+          width: fit-content;
+          border-radius: 999px;
+          padding: 5px 10px;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          background: rgba(28, 61, 43, 0.08);
+          color: rgba(28, 61, 43, 0.74);
+        }
+
+        .bd-topbar {
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          margin-bottom: 14px;
+        }
+
+        .bd-back-link {
+          border: 0;
+          background: transparent;
+          color: rgba(244, 250, 247, 0.86);
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 600;
+          padding: 0;
+        }
+
+        .bd-back-link svg {
+          width: 16px;
+          height: 16px;
         }
 
         .bd-layout {
@@ -778,6 +1077,11 @@ const ContactUs = () => {
           box-shadow: 0 28px 60px rgba(12, 29, 20, 0.16);
         }
 
+        .bd-contact-card {
+          width: min(100%, 720px);
+          margin: 0 auto;
+        }
+
         .bd-form-header {
           display: grid;
           gap: 8px;
@@ -802,6 +1106,26 @@ const ContactUs = () => {
 
         .bd-step-content {
           transition: all 0.3s ease;
+        }
+
+        .bd-contact-note {
+          font-size: 13px;
+          color: rgba(18, 38, 32, 0.62);
+          line-height: 1.6;
+        }
+
+        .bd-contact-success {
+          border-radius: 18px;
+          border: 1px solid rgba(28, 61, 43, 0.12);
+          background: rgba(28, 61, 43, 0.06);
+          padding: 16px 18px;
+          color: #163020;
+          display: grid;
+          gap: 6px;
+        }
+
+        .bd-contact-success strong {
+          font-size: 15px;
         }
 
         .bd-step-indicator {
@@ -1004,11 +1328,24 @@ const ContactUs = () => {
         .bd-btn {
           border-radius: 12px;
           padding: 10px 18px;
+          min-height: 48px;
           font-size: 13px;
           font-weight: 500;
           border: 1px solid transparent;
           cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          line-height: 1;
+          white-space: nowrap;
           transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+        }
+
+        .bd-btn svg {
+          width: 18px;
+          height: 18px;
+          flex-shrink: 0;
         }
 
         .bd-btn.primary {
@@ -1253,12 +1590,37 @@ const ContactUs = () => {
         }
 
         @media (max-width: 720px) {
+          .bd-mode-shell,
           .bd-shell {
             padding: 32px 18px 40px;
           }
 
+          .bd-root.bd-root-compact {
+            min-height: auto;
+            display: block;
+            padding-top: 56px;
+            padding-bottom: 32px;
+          }
+
+          .bd-mode-shell {
+            padding: 0 18px;
+          }
+
           .bd-grid {
             grid-template-columns: 1fr;
+          }
+
+          .bd-panel,
+          .bd-form-card {
+            padding: 20px;
+          }
+
+          .bd-choice-card {
+            padding: 0;
+          }
+
+          .bd-choice-card-head {
+            padding: 18px 18px 18px 22px;
           }
 
           .bd-actions {
@@ -1272,136 +1634,369 @@ const ContactUs = () => {
         }
       `}</style>
 
-      <div className="bd-shell">
-        <div className="bd-layout">
-          <input
-            type="text"
-            className="bd-hp"
-            name="website"
-            tabIndex="-1"
-            autoComplete="off"
-            value={formData.trapField}
-            onChange={(event) => setField("trapField", event.target.value)}
-          />
-          <section className="bd-panel">
-            <span className="bd-glow one" />
-            <span className="bd-glow two" />
-            <div className="bd-panel-content">
-              <h1>AI Data Services That Power Real AI</h1>
-              <p>
-                Work with Lifewood Data Technology to build high-quality datasets,
-                scale AI training pipelines, and accelerate production-ready models.
-              </p>
+      {!mode ? (
+        <div className="bd-mode-shell">
+          <div className="bd-layout bd-choice-layout">
+            <section className="bd-panel">
+              <span className="bd-glow one" />
+              <span className="bd-glow two" />
+              <div className="bd-panel-content">
+                <div className="bd-mode-header">
+                  <span className="contact-chip">Book a Demo</span>
+                  <h1>What do you need?</h1>
+                  <p>
+                    Continue to book a live walkthrough with our team, or send an
+                    inquiry first if you are still exploring.
+                  </p>
+                </div>
 
-              <div className="bd-feature-list">
-                <div className="bd-feature">
-                  <CheckCircle className="bd-feature-icon" strokeWidth={2.4} />
-                  <div>
-                    <h3>Scalable AI Data Pipelines</h3>
-                    <span>Annotation, validation, and data collection at enterprise scale.</span>
+                <div className="bd-feature-list">
+                  <div className="bd-feature">
+                    <CheckCircle className="bd-feature-icon" strokeWidth={2.4} />
+                    <div>
+                      <h3>Live product walkthrough</h3>
+                      <span>See how Lifewood supports AI data pipelines from collection to quality control.</span>
+                    </div>
                   </div>
-                </div>
-                <div className="bd-feature">
-                  <CheckCircle className="bd-feature-icon" strokeWidth={2.4} />
-                  <div>
-                    <h3>Human-in-the-Loop Quality</h3>
-                    <span>Multi-layer validation ensures high accuracy datasets.</span>
-                  </div>
-                </div>
-                <div className="bd-feature">
-                  <CheckCircle className="bd-feature-icon" strokeWidth={2.4} />
-                  <div>
-                    <h3>Global Workforce</h3>
-                    <span>Distributed teams supporting multilingual and multimodal AI.</span>
-                  </div>
-                </div>
-                <div className="bd-feature">
-                  <CheckCircle className="bd-feature-icon" strokeWidth={2.4} />
-                  <div>
-                    <h3>Secure and Compliant</h3>
-                    <span>Enterprise-grade data handling and privacy standards.</span>
+                  <div className="bd-feature">
+                    <CheckCircle className="bd-feature-icon" strokeWidth={2.4} />
+                    <div>
+                      <h3>Flexible first contact</h3>
+                      <span>Ask a question first if you are still validating fit, scope, or timing.</span>
+                    </div>
                   </div>
                 </div>
               </div>
+            </section>
 
-              <div className="bd-trust">
-                <span>Trusted by global AI teams building next-generation systems.</span>
-                <div className="bd-marquee" aria-label="Partner logos">
-                  <div className="bd-marquee-track">
-                    {[...partners, ...partners].map((partner, index) => (
-                      <div key={`${partner.name}-${index}`} className="bd-logo-wrap">
-                        <img
-                          className="bd-logo-img"
-                          src={partner.logo}
-                          alt={partner.name}
-                          loading="lazy"
-                        />
+            <section className="bd-form-card">
+              <div className="bd-form-header">
+                <h2>Choose how you want to continue</h2>
+                <p>
+                  Pick the path that matches your current stage. You can switch later.
+                </p>
+              </div>
+
+              <div className="bd-choice-stack">
+                {modeOptions.map((option) => {
+                  const Icon = option.icon;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className="bd-choice-card"
+                      onClick={() => setModeWithUrl(option.id)}
+                    >
+                      <div className="bd-choice-card-head">
+                        <span className="bd-mode-icon">
+                          <Icon strokeWidth={2.1} />
+                        </span>
+                        <div className="bd-choice-copy">
+                          <span className="bd-choice-meta">
+                            {option.id === "demo" ? "High intent" : "Low friction"}
+                          </span>
+                          <h2>{option.title}</h2>
+                          <p>{option.description}</p>
+                          <span className="bd-choice-link">
+                            {option.id === "demo" ? "Continue with book a demo" : "Send us an inquiry"}
+                          </span>
+                        </div>
                       </div>
-                    ))}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
+        </div>
+      ) : mode === "demo" ? (
+        <div className="bd-shell">
+          <div className="bd-topbar">
+            <button type="button" className="bd-back-link" onClick={() => setModeWithUrl(null)}>
+              <ArrowLeft strokeWidth={2.2} />
+              <span>Back to options</span>
+            </button>
+          </div>
+          <div className="bd-layout">
+            <input
+              type="text"
+              className="bd-hp"
+              name="website"
+              tabIndex="-1"
+              autoComplete="off"
+              value={formData.trapField}
+              onChange={(event) => setField("trapField", event.target.value)}
+            />
+            <section className="bd-panel">
+              <span className="bd-glow one" />
+              <span className="bd-glow two" />
+              <div className="bd-panel-content">
+                <h1>AI Data Services That Power Real AI</h1>
+                <p>
+                  Work with Lifewood Data Technology to build high-quality datasets,
+                  scale AI training pipelines, and accelerate production-ready models.
+                </p>
+
+                <div className="bd-feature-list">
+                  <div className="bd-feature">
+                    <CheckCircle className="bd-feature-icon" strokeWidth={2.4} />
+                    <div>
+                      <h3>Scalable AI Data Pipelines</h3>
+                      <span>Annotation, validation, and data collection at enterprise scale.</span>
+                    </div>
+                  </div>
+                  <div className="bd-feature">
+                    <CheckCircle className="bd-feature-icon" strokeWidth={2.4} />
+                    <div>
+                      <h3>Human-in-the-Loop Quality</h3>
+                      <span>Multi-layer validation ensures high accuracy datasets.</span>
+                    </div>
+                  </div>
+                  <div className="bd-feature">
+                    <CheckCircle className="bd-feature-icon" strokeWidth={2.4} />
+                    <div>
+                      <h3>Global Workforce</h3>
+                      <span>Distributed teams supporting multilingual and multimodal AI.</span>
+                    </div>
+                  </div>
+                  <div className="bd-feature">
+                    <CheckCircle className="bd-feature-icon" strokeWidth={2.4} />
+                    <div>
+                      <h3>Secure and Compliant</h3>
+                      <span>Enterprise-grade data handling and privacy standards.</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bd-trust">
+                  <span>Trusted by global AI teams building next-generation systems.</span>
+                  <div className="bd-marquee" aria-label="Partner logos">
+                    <div className="bd-marquee-track">
+                      {[...partners, ...partners].map((partner, index) => (
+                        <div key={`${partner.name}-${index}`} className="bd-logo-wrap">
+                          <img
+                            className="bd-logo-img"
+                            src={partner.logo}
+                            alt={partner.name}
+                            loading="lazy"
+                          />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
 
-          <section className="bd-form-card">
+            <section className="bd-form-card">
+              <div className="bd-form-header">
+                <h2>Schedule a Demo</h2>
+                <p>
+                  Tell us about your AI project and our team will walk you through how Lifewood can support your data pipeline.
+                </p>
+              </div>
+
+              <div className="bd-flow">
+                <StepIndicator step={step} />
+
+                <div className="bd-step-content">
+                  {step === 1 && (
+                    <DemoStep1 formData={formData} setField={setField} fieldErrors={fieldErrors} />
+                  )}
+                  {step === 2 && (
+                    <DemoStep2 formData={formData} setField={setField} fieldErrors={fieldErrors} />
+                  )}
+                  {step === 3 && <DemoStep3 />}
+                </div>
+
+                <div className="bd-actions">
+                  <button
+                    type="button"
+                    className="bd-btn secondary"
+                    onClick={handleBack}
+                    disabled={step === 1}
+                  >
+                    Back
+                  </button>
+
+                  {step < 3 ? (
+                    <button
+                      type="button"
+                      className="bd-btn primary"
+                      onClick={handleNext}
+                      disabled={!canAdvance}
+                    >
+                      {step === 1
+                        ? "Next -> Project Overview"
+                        : "Next -> Schedule Demo"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="bd-btn primary"
+                      onClick={handleConfirm}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? "Submitting..." : "Complete Booking"}
+                    </button>
+                  )}
+                </div>
+                {submitError && <div className="bd-submit-error">{submitError}</div>}
+              </div>
+            </section>
+          </div>
+        </div>
+      ) : (
+        <div className="bd-mode-shell">
+          <div className="bd-topbar">
+            <button type="button" className="bd-back-link" onClick={() => setModeWithUrl(null)}>
+              <ArrowLeft strokeWidth={2.2} />
+              <span>Back to options</span>
+            </button>
+          </div>
+          <div className="bd-layout">
+            <section className="bd-panel">
+              <span className="bd-glow one" />
+              <span className="bd-glow two" />
+              <div className="bd-panel-content">
+                <h1>Ask our team before you book.</h1>
+                <p>
+                  Share your goals, questions, or blockers and we will route your
+                  inquiry to the right team for a direct response.
+                </p>
+
+                <div className="bd-feature-list">
+                  <div className="bd-feature">
+                    <MessageCircle className="bd-feature-icon" strokeWidth={2.4} />
+                    <div>
+                      <h3>Human follow-up within 24 hours</h3>
+                      <span>Reach sales, partnerships, or support without committing to a demo yet.</span>
+                    </div>
+                  </div>
+                  <div className="bd-feature">
+                    <CheckCircle className="bd-feature-icon" strokeWidth={2.4} />
+                    <div>
+                      <h3>Fast routing to the right team</h3>
+                      <span>Tell us your inquiry type so we can reply with the right context immediately.</span>
+                    </div>
+                  </div>
+                  <div className="bd-feature">
+                    <Send className="bd-feature-icon" strokeWidth={2.4} />
+                    <div>
+                      <h3>Low-friction first step</h3>
+                      <span>Ask about scope, pricing, partnerships, or support before scheduling time.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="bd-form-card bd-contact-card">
             <div className="bd-form-header">
-              <h2>Schedule a Demo</h2>
+              <h2>
+                <MessageCircle strokeWidth={2.1} />
+                Ask a Question
+              </h2>
               <p>
-                Tell us about your AI project and our team will walk you through how Lifewood can support your data pipeline.
+                Send your inquiry and our team will get back to you within 24 hours.
               </p>
             </div>
 
-            <div className="bd-flow">
-              <StepIndicator step={step} />
-
-              <div className="bd-step-content">
-                {step === 1 && (
-                  <DemoStep1 formData={formData} setField={setField} fieldErrors={fieldErrors} />
-                )}
-                {step === 2 && (
-                  <DemoStep2 formData={formData} setField={setField} fieldErrors={fieldErrors} />
-                )}
-                {step === 3 && <DemoStep3 />}
+            {contactSubmitted ? (
+              <div className="bd-contact-success" role="status" aria-live="polite">
+                <strong>Inquiry received.</strong>
+                <span>
+                  We’ll review your message and follow up using {contactForm.email || "your email"}.
+                </span>
               </div>
+            ) : (
+              <form className="bd-flow" onSubmit={handleContactSubmit}>
+                <div className="bd-grid">
+                  <div className="bd-field">
+                    <label className="bd-label">Full Name</label>
+                    <input
+                      className={`bd-input ${contactErrors.fullName ? "error" : ""}`}
+                      type="text"
+                      value={contactForm.fullName}
+                      onChange={(event) => setContactField("fullName", event.target.value)}
+                      placeholder="Avery Chen"
+                      required
+                    />
+                    {contactErrors.fullName && (
+                      <span className="bd-field-error">{contactErrors.fullName}</span>
+                    )}
+                  </div>
 
-              <div className="bd-actions">
-                <button
-                  type="button"
-                  className="bd-btn secondary"
-                  onClick={handleBack}
-                  disabled={step === 1}
-                >
-                  Back
-                </button>
+                  <div className="bd-field">
+                    <label className="bd-label">Email</label>
+                    <input
+                      className={`bd-input ${contactErrors.email ? "error" : ""}`}
+                      type="email"
+                      value={contactForm.email}
+                      onChange={(event) => setContactField("email", event.target.value)}
+                      placeholder="name@company.com"
+                      required
+                    />
+                    {contactErrors.email && (
+                      <span className="bd-field-error">{contactErrors.email}</span>
+                    )}
+                  </div>
 
-                {step < 3 ? (
-                  <button
-                    type="button"
-                    className="bd-btn primary"
-                    onClick={handleNext}
-                    disabled={!canAdvance}
-                  >
-                    {step === 1
-                      ? "Next -> Project Overview"
-                      : "Next -> Schedule Demo"}
+                  <div className="bd-field full">
+                    <label className="bd-label">Inquiry Type</label>
+                    <select
+                      className={`bd-input ${contactErrors.inquiryType ? "error" : ""}`}
+                      value={contactForm.inquiryType}
+                      onChange={(event) => setContactField("inquiryType", event.target.value)}
+                      required
+                    >
+                      <option value="">Select inquiry type</option>
+                      {allowedInquiryTypes.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                    {contactErrors.inquiryType && (
+                      <span className="bd-field-error">{contactErrors.inquiryType}</span>
+                    )}
+                  </div>
+
+                  <div className="bd-field full">
+                    <label className="bd-label">Message</label>
+                    <textarea
+                      className={`bd-textarea ${contactErrors.message ? "error" : ""}`}
+                      value={contactForm.message}
+                      onChange={(event) => setContactField("message", event.target.value)}
+                      placeholder="Tell us what you need help with."
+                      required
+                    />
+                    {contactErrors.message && (
+                      <span className="bd-field-error">{contactErrors.message}</span>
+                    )}
+                  </div>
+                </div>
+
+                <p className="bd-contact-note">
+                  We’ll capture your inquiry through the existing contact submission flow and route it to the right team.
+                </p>
+
+                <div className="bd-actions">
+                  <button type="button" className="bd-btn secondary" onClick={() => setModeWithUrl(null)}>
+                    Back
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="bd-btn primary"
-                    onClick={handleConfirm}
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? "Submitting..." : "Complete Booking"}
+                  <button type="submit" className="bd-btn primary" disabled={contactIsSubmitting}>
+                    <Send strokeWidth={2.1} />
+                    <span>{contactIsSubmitting ? "Sending..." : "Send Inquiry"}</span>
                   </button>
-                )}
-              </div>
-              {submitError && <div className="bd-submit-error">{submitError}</div>}
-            </div>
-          </section>
+                </div>
+                {contactSubmitError && <div className="bd-submit-error">{contactSubmitError}</div>}
+              </form>
+            )}
+            </section>
+          </div>
         </div>
-      </div>
+      )}
       {submitted && (
         <div
           className="bd-modal-overlay"

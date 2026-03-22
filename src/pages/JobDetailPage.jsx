@@ -4,6 +4,7 @@ import jobs from "../data/jobs";
 import { supabase } from "../lib/supabaseClient";
 import emailjs from "@emailjs/browser";
 import { buildScreeningLink } from "../utils/screeningLink";
+import { COUNTRIES } from "../constants/countries";
 
 const resumeBucket = import.meta.env.VITE_SUPABASE_RESUME_BUCKET || "resumes";
 
@@ -29,6 +30,7 @@ const JobDetailPage = () => {
   const [cvFile, setCvFile] = useState(null);
   const [formData, setFormData] = useState({
     firstName: "",
+    middleName: "",
     lastName: "",
     gender: "",
     age: "",
@@ -65,7 +67,7 @@ const JobDetailPage = () => {
 
     try {
       const fileExt = (cvFile.name.split(".").pop() || "pdf").toLowerCase();
-      const fileKey = `${Date.now()}-${safeName(formData.firstName)}-${safeName(formData.lastName)}.${fileExt}`;
+      const fileKey = `${Date.now()}-${safeName(formData.firstName)}-${safeName(formData.middleName)}-${safeName(formData.lastName)}.${fileExt}`;
       const filePath = `applications/${fileKey}`;
 
       const { error: uploadError } = await supabase.storage
@@ -85,6 +87,7 @@ const JobDetailPage = () => {
 
       const payload = {
         first_name: formData.firstName,
+        middle_name: formData.middleName,
         last_name: formData.lastName,
         gender: formData.gender,
         age: formData.age ? Number(formData.age) : null,
@@ -122,7 +125,7 @@ const JobDetailPage = () => {
       }
       const insertedData = submitJson?.data || null;
 
-      const applicantName = `${formData.firstName} ${formData.lastName}`.trim();
+      const applicantName = `${formData.firstName} ${formData.middleName} ${formData.lastName}`.replace(/\s+/g, " ").trim();
       const screeningLink = buildScreeningLink({
         screeningUrl,
         applicationId: insertedData?.id,
@@ -177,6 +180,13 @@ const JobDetailPage = () => {
             to_email: emailTo,
             applicant_name: applicantName,
             position_name: job?.title || formData.position,
+            subject_content: `Complete Your AI Screening for ${job?.title || formData.position} role at Lifewood`,
+            email_intro: `Thank you for applying for the ${job?.title || formData.position} role at Lifewood! We're excited to move you forward in the process.`,
+            email_body: "As the next step, we'd like you to complete a short AI-powered screening interview. It should take approximately 10 minutes and can be done at your convenience.",
+            cta_text: 'Start your screening here',
+            email_footer: "Please complete it as soon as possible. Once we've reviewed your responses, we'll be in touch regarding the next steps.",
+            signoff_name: 'The Lifewood Team',
+            screening_link: screeningLink,
             html_content: emailHtml,
           },
           emailPublicKey
@@ -186,13 +196,14 @@ const JobDetailPage = () => {
           throw new Error("EmailJS send failed. Check template variables and API keys.");
         }
       } else {
-        throw new Error("EmailJS keys are missing. Check VITE_EMAILJS_SERVICE_ID, VITE_EMAILJS_TEMPLATE_ID_PRESCREENING (or VITE_EMAILJS_TEMPLATE_ID), and VITE_EMAILJS_PUBLIC_KEY.");
+        throw new Error("EmailJS keys are missing. Check VITE_EMAILJS_SERVICE_ID, VITE_EMAILJS_TEMPLATE_ID_PRESCREENING_FOLLOWUP, and VITE_EMAILJS_PUBLIC_KEY.");
       }
 
       setSubmitSuccess(true);
       setFormData((prev) => ({
         ...prev,
         firstName: "",
+        middleName: "",
         lastName: "",
         gender: "",
         age: "",
@@ -231,9 +242,7 @@ const JobDetailPage = () => {
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
   const emailServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || "";
   const emailTemplateId =
-    import.meta.env.VITE_EMAILJS_TEMPLATE_ID_PRESCREENING ||
-    import.meta.env.VITE_EMAILJS_TEMPLATE_ID ||
-    "";
+    import.meta.env.VITE_EMAILJS_TEMPLATE_ID_PRESCREENING_FOLLOWUP || "";
   const emailPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || "";
   const screeningUrl = import.meta.env.VITE_SCREENING_URL || "";
 
@@ -676,6 +685,32 @@ const JobDetailPage = () => {
           display: grid;
           gap: 10px;
         }
+        .job-result-modal.success {
+          padding: 24px;
+          gap: 14px;
+        }
+        .job-result-icon {
+          width: 54px;
+          height: 54px;
+          border-radius: 50%;
+          display: grid;
+          place-items: center;
+          background: linear-gradient(135deg, rgba(4,98,65,0.14), rgba(242,167,75,0.22));
+          color: #046241;
+          font-size: 24px;
+          font-weight: 800;
+        }
+        .job-result-title-wrap {
+          display: grid;
+          gap: 6px;
+        }
+        .job-result-caption {
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: #046241;
+        }
         .job-result-modal h3 {
           margin: 0;
           font-size: 20px;
@@ -703,6 +738,9 @@ const JobDetailPage = () => {
           cursor: pointer;
           background: #046241;
           color: #fff;
+        }
+        .job-result-actions button:hover {
+          opacity: 0.96;
         }
         @media (max-width: 700px) {
           .job-form-grid { grid-template-columns: 1fr; }
@@ -786,6 +824,16 @@ const JobDetailPage = () => {
                   />
                 </div>
                 <div className="job-field">
+                  <label className="job-label">Middle Name</label>
+                  <input
+                    className="job-input"
+                    type="text"
+                    value={formData.middleName}
+                    onChange={(e) => setField("middleName", e.target.value)}
+                    placeholder="e.g. Santos"
+                  />
+                </div>
+                <div className="job-field">
                   <label className="job-label">Gender</label>
                   <select
                     className="job-select"
@@ -850,11 +898,9 @@ const JobDetailPage = () => {
                     onChange={(e) => setField("country", e.target.value)}
                   >
                     <option value="">Select country</option>
-                    <option value="Philippines">Philippines</option>
-                    <option value="Singapore">Singapore</option>
-                    <option value="United States">United States</option>
-                    <option value="India">India</option>
-                    <option value="United Kingdom">United Kingdom</option>
+                    {COUNTRIES.map((country) => (
+                      <option key={country} value={country}>{country}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="job-field full">
@@ -899,18 +945,19 @@ const JobDetailPage = () => {
       {isResultModalOpen ? (
         <div className="job-result-modal-overlay" onClick={() => setIsResultModalOpen(false)}>
           <div
-            className={`job-result-modal ${resultModalKind === "warning" ? "warning" : ""}`}
+            className={`job-result-modal ${resultModalKind === "warning" ? "warning" : "success"}`}
             onClick={(event) => event.stopPropagation()}
           >
+            {resultModalKind === "success" ? <div className="job-result-icon">✓</div> : null}
+            <div className="job-result-title-wrap">
+              {resultModalKind === "success" ? <div className="job-result-caption">Application Received</div> : null}
             <h3>{resultModalTitle}</h3>
             <p>{resultModalMessage}</p>
-            {resultModalKind === "success" ? (
-              <p style={{ fontSize: 13 }}>
-                Tip: your pre-screening link was sent by email. Complete it to move forward in the hiring process.
-              </p>
-            ) : null}
+            </div>
             <div className="job-result-actions">
-              <button type="button" onClick={() => setIsResultModalOpen(false)}>Close</button>
+              <button type="button" onClick={() => setIsResultModalOpen(false)}>
+                {resultModalKind === "success" ? "Done" : "Close"}
+              </button>
             </div>
           </div>
         </div>

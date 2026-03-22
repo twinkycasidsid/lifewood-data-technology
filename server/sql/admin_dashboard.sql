@@ -37,15 +37,37 @@ create table if not exists public.job_applications (
   created_at timestamptz not null default now()
 );
 
+alter table public.job_applications add column if not exists first_name text;
+alter table public.job_applications add column if not exists middle_name text;
+alter table public.job_applications add column if not exists last_name text;
+alter table public.job_applications add column if not exists email text;
+alter table public.job_applications add column if not exists phone text;
+alter table public.job_applications add column if not exists gender text;
+alter table public.job_applications add column if not exists age integer;
+alter table public.job_applications add column if not exists country text;
+alter table public.job_applications add column if not exists current_address text;
+alter table public.job_applications add column if not exists position_applied text;
+alter table public.job_applications add column if not exists cv_url text;
+alter table public.job_applications add column if not exists ai_analysis text;
+alter table public.job_applications add column if not exists ai_recommendation text;
+alter table public.job_applications add column if not exists pre_screening_results text;
+alter table public.job_applications add column if not exists job_id uuid;
+
 create table if not exists public.calendly_bookings (
   id uuid primary key default gen_random_uuid(),
   event text not null,
   invitee text,
   start_time text,
   end_time text,
+  location text,
+  meeting_url text,
   status text,
   created_at timestamptz not null default now()
 );
+
+alter table public.calendly_bookings
+  add column if not exists location text,
+  add column if not exists meeting_url text;
 
 create table if not exists public.contact_submissions (
   id uuid primary key default gen_random_uuid(),
@@ -55,6 +77,16 @@ create table if not exists public.contact_submissions (
   status text,
   created_at timestamptz not null default now()
 );
+
+alter table public.contact_submissions
+  add column if not exists full_name text,
+  add column if not exists work_email text,
+  add column if not exists company_website text,
+  add column if not exists company_size text,
+  add column if not exists data_type text,
+  add column if not exists dataset_size text,
+  add column if not exists timeline text,
+  add column if not exists project_description text;
 
 create table if not exists public.admin_activity_logs (
   id uuid primary key default gen_random_uuid(),

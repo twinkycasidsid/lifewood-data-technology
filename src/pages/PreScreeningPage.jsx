@@ -354,7 +354,7 @@ const PreScreeningPage = () => {
                 <li>Each question should be answered in your own words and based on your personal experience.</li>
                 <li>You can move through the questions at your own pace and submit when you are ready.</li>
                 <li>Keep this tab active throughout the interview.</li>
-                <li>Pasting external text is disabled to preserve response integrity.</li>
+                <li>You may paste responses during testing.</li>
               </ul>
               <small>Session: {sessionId.slice(0, 12)}</small>
               <button type="button" className="ps-btn primary" onClick={startInterview}>
@@ -375,8 +375,6 @@ const PreScreeningPage = () => {
               className="ps-answer"
               value={answers[activeIndex]}
               onChange={(event) => updateAnswer(event.target.value)}
-              onPaste={(event) => handleBlockedAction("paste", event)}
-              onDrop={(event) => handleBlockedAction("drop", event)}
               placeholder="Write your response with specific context, your decisions, and outcomes."
               required
             />
