@@ -39,6 +39,12 @@ import {
 import TrustedBy from "./components/sections/TrustedBy";
 import Chatbot from "./components/Chatbot";
 
+const allowedAdminRoles = new Set([
+  "super_admin",
+  "hr_admin",
+  "sales_client_manager",
+]);
+
 function App() {
   return (
     <Router>
@@ -85,7 +91,7 @@ function AppContent() {
     const token =
       localStorage.getItem("lwAuthToken") ||
       sessionStorage.getItem("lwAuthToken");
-    if (!token || role !== "admin") {
+    if (!token || !allowedAdminRoles.has(role)) {
       navigate("/admin-login");
     }
   }, [location.pathname, navigate]);
