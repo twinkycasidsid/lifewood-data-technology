@@ -10,6 +10,8 @@ import {
   Apple,
 } from "lucide-react";
 
+const allowedAdminRoles = new Set(["super_admin", "hr_admin", "sales_client_manager"]);
+
 const GetStartedPage = ({
   authMode = "signup",
   onAuthModeChange = () => {},
@@ -64,7 +66,7 @@ const GetStartedPage = ({
       localStorage.setItem("lwAuthRole", role);
       localStorage.setItem("lwAuthUser", JSON.stringify(payload?.user || {}));
 
-      if (role === "admin") {
+      if (allowedAdminRoles.has(role)) {
         onNavigate("/dashboard");
       } else {
         localStorage.removeItem("lwAuthToken");

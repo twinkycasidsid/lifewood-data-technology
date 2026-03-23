@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Lock, Mail } from "lucide-react";
 
+const allowedAdminRoles = new Set(["super_admin", "hr_admin", "sales_client_manager"]);
+
 const AdminLoginPage = ({ onNavigate = () => {} }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,7 +44,7 @@ const AdminLoginPage = ({ onNavigate = () => {} }) => {
       sessionStorage.removeItem("lwAuthRole");
       sessionStorage.removeItem("lwAuthUser");
 
-      if (role === "admin") {
+      if (allowedAdminRoles.has(role)) {
         onNavigate("/dashboard");
       } else {
         sessionStorage.removeItem("lwAuthToken");

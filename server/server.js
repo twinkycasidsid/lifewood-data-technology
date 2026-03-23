@@ -90,6 +90,27 @@ const ensureSupabaseConfigured = (res) => {
 
 const normalizeText = (value = "") => String(value || "").replace(/\s+/g, " ").trim();
 const isValidBasicEmail = (value = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+const normalizeProfileRole = (value = "") => {
+  const normalized = normalizeText(value).toLowerCase().replace(/\s*\/\s*/g, " / ");
+  if (["super admin", "super_admin", "owner", "admin"].includes(normalized)) {
+    return "super_admin";
+  }
+  if (["hr admin", "hr_admin", "hr", "recruiter", "recruitment admin"].includes(normalized)) {
+    return "hr_admin";
+  }
+  if (
+    [
+      "sales / client manager",
+      "sales_client_manager",
+      "sales",
+      "client manager",
+      "sales manager",
+    ].includes(normalized)
+  ) {
+    return "sales_client_manager";
+  }
+  return "user";
+};
 const formatProfileNameFromEmail = (email = "") => {
   const localPart = String(email || "").split("@")[0];
   if (!localPart) return "User";
@@ -1452,7 +1473,7 @@ app.post("/api/auth/login", async (req, res) => {
         .single();
 
       if (!profileError && profileData?.role) {
-        role = profileData.role;
+        role = normalizeProfileRole(profileData.role);
       }
     }
 

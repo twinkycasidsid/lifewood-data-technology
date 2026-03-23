@@ -65,10 +65,17 @@ const Chatbot = () => {
   });
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
-  const chatApiUrl = useMemo(
-    () => import.meta.env.VITE_CHAT_API_URL || "/api/chat",
-    [],
-  );
+  const chatApiUrl = useMemo(() => {
+    const explicitChatApiUrl = import.meta.env.VITE_CHAT_API_URL?.trim();
+    if (explicitChatApiUrl) return explicitChatApiUrl;
+
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+    if (apiBaseUrl) {
+      return `${apiBaseUrl.replace(/\/+$/, "")}/api/chat`;
+    }
+
+    return "/api/chat";
+  }, []);
 
   const isSpeechSupported =
     typeof window !== "undefined" &&
