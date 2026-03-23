@@ -133,6 +133,11 @@ const extractLocationFromPayload = (payload = {}) =>
       payload?.location?.join_url,
   );
 
+const isMissingColumnError = (error) =>
+  error?.code === "42703" ||
+  error?.code === "PGRST204" ||
+  /column/i.test(String(error?.message || ""));
+
 const syncCalendlyBookings = async () => {
   if (!supabaseAdminReady) {
     return { skipped: true, reason: "Supabase service role key not configured." };
@@ -153,16 +158,30 @@ const syncCalendlyBookings = async () => {
   const events = Array.isArray(eventsPayload?.collection) ? eventsPayload.collection : [];
 
   let existingRows = [];
+  let useLegacyBookingSchema = false;
   const existingResult = await supabaseAdmin
     .from("calendly_bookings")
-    .select("id,event_uri,invitee_uri");
+    .select("id,event_uri,invitee_uri,event,invitee,start_time,end_time");
 
   if (!existingResult.error && Array.isArray(existingResult.data)) {
     existingRows = existingResult.data;
+  } else if (isMissingColumnError(existingResult.error)) {
+    useLegacyBookingSchema = true;
+    const legacyExistingResult = await supabaseAdmin
+      .from("calendly_bookings")
+      .select("id,event,invitee,start_time,end_time");
+    if (!legacyExistingResult.error && Array.isArray(legacyExistingResult.data)) {
+      existingRows = legacyExistingResult.data;
+    }
   }
 
   const existingByKey = new Map(
-    existingRows.map((row) => [`${row.event_uri || ""}::${row.invitee_uri || ""}`, row.id]),
+    existingRows.map((row) => {
+      if (useLegacyBookingSchema) {
+        return [`${row.event || ""}::${row.invitee || ""}::${row.start_time || ""}::${row.end_time || ""}`, row.id];
+      }
+      return [`${row.event_uri || ""}::${row.invitee_uri || ""}`, row.id];
+    }),
   );
   let inserted = 0;
   let updated = 0;
@@ -175,6 +194,14 @@ const syncCalendlyBookings = async () => {
     const eventUuid = extractCalendlyUuid(eventUri);
     if (!eventUuid) continue;
 
+    let eventDetails = eventItem;
+    try {
+      const eventDetailsPayload = await calendlyGet(`https://api.calendly.com/scheduled_events/${eventUuid}`);
+      eventDetails = eventDetailsPayload?.resource || eventItem;
+    } catch (_error) {
+      eventDetails = eventItem;
+    }
+
     let invitees = [];
     try {
       const inviteesPayload = await calendlyGet(`https://api.calendly.com/scheduled_events/${eventUuid}/invitees`);
@@ -185,38 +212,73 @@ const syncCalendlyBookings = async () => {
 
     for (const inviteeItem of invitees) {
       processedInvitees += 1;
-      const payload = { event: eventItem, invitee: inviteeItem };
-      const key = `${eventUri}::${inviteeItem?.uri || ""}`;
+      const payload = { event: eventDetails, invitee: inviteeItem };
+      const eventName = normalizeText(eventDetails?.name || eventItem?.name);
+      const inviteeName = normalizeText(inviteeItem?.name);
+      const location = normalizeText(extractLocationFromPayload(payload)) || null;
+      const meetingUrl = normalizeText(extractMeetingLinkFromPayload(payload)) || null;
+      const modernKey = `${eventUri}::${inviteeItem?.uri || ""}`;
+      const legacyKey = `${eventName || ""}::${inviteeName || ""}::${eventDetails?.start_time || eventItem?.start_time || ""}::${eventDetails?.end_time || eventItem?.end_time || ""}`;
       const normalizedRecord = {
         event_uri: eventUri,
         invitee_uri: inviteeItem?.uri || null,
-        event_name: normalizeText(eventItem?.name),
-        invitee_name: normalizeText(inviteeItem?.name),
+        event_name: eventName,
+        invitee_name: inviteeName,
         invitee_email: normalizeText(inviteeItem?.email).toLowerCase() || null,
-        start_time: eventItem?.start_time || null,
-        end_time: eventItem?.end_time || null,
-        status: normalizeText(eventItem?.status || inviteeItem?.status) || "active",
-        timezone: normalizeText(eventItem?.start_time_timezone || inviteeItem?.timezone || eventItem?.timezone) || null,
+        start_time: eventDetails?.start_time || eventItem?.start_time || null,
+        end_time: eventDetails?.end_time || eventItem?.end_time || null,
+        status: normalizeText(eventDetails?.status || eventItem?.status || inviteeItem?.status) || "active",
+        timezone: normalizeText(eventDetails?.start_time_timezone || eventItem?.start_time_timezone || inviteeItem?.timezone || eventDetails?.timezone || eventItem?.timezone) || null,
+        location,
+        meeting_url: meetingUrl,
         payload,
       };
+      const legacyRecord = {
+        event: eventName || "Booking",
+        invitee: inviteeName || null,
+        start_time: normalizedRecord.start_time,
+        end_time: normalizedRecord.end_time,
+        location,
+        meeting_url: meetingUrl,
+        status: normalizedRecord.status,
+      };
+      const lookupKey = useLegacyBookingSchema ? legacyKey : modernKey;
 
-      if (existingByKey.has(key)) {
-        const updateResult = await supabaseAdmin
+      if (existingByKey.has(lookupKey)) {
+        let updateResult = await supabaseAdmin
           .from("calendly_bookings")
-          .update(normalizedRecord)
-          .eq("id", existingByKey.get(key));
+          .update(useLegacyBookingSchema ? legacyRecord : normalizedRecord)
+          .eq("id", existingByKey.get(lookupKey));
+        if (isMissingColumnError(updateResult.error) && !useLegacyBookingSchema) {
+          useLegacyBookingSchema = true;
+          updateResult = await supabaseAdmin
+            .from("calendly_bookings")
+            .update(legacyRecord)
+            .eq("id", existingByKey.get(lookupKey));
+        }
         if (updateResult.error) throw updateResult.error;
         updated += 1;
       } else {
-        const insertResult = await supabaseAdmin
+        let insertResult = await supabaseAdmin
           .from("calendly_bookings")
-          .insert(normalizedRecord)
+          .insert(useLegacyBookingSchema ? legacyRecord : normalizedRecord)
           .select("id")
           .single();
 
+        if (isMissingColumnError(insertResult.error) && !useLegacyBookingSchema) {
+          useLegacyBookingSchema = true;
+          insertResult = await supabaseAdmin
+            .from("calendly_bookings")
+            .insert(legacyRecord)
+            .select("id")
+            .single();
+        }
+
         if (!insertResult.error && insertResult.data?.id) {
-          existingByKey.set(key, insertResult.data.id);
+          existingByKey.set(useLegacyBookingSchema ? legacyKey : modernKey, insertResult.data.id);
           inserted += 1;
+        } else if (insertResult.error) {
+          throw insertResult.error;
         }
       }
     }
@@ -1857,18 +1919,33 @@ app.get("/api/admin/bookings", async (req, res) => {
       .order("start_time", { ascending: true });
 
     if (error) {
-      if (error.code === "42703") {
+      if (isMissingColumnError(error)) {
         const fallback = await supabaseAdmin
           .from("calendly_bookings")
           .select("id,event,event_name,invitee,invitee_name,invitee_email,start_time,end_time,status,timezone,payload,created_at")
           .order("start_time", { ascending: true });
 
-        if (fallback.error) throw fallback.error;
-        data = (fallback.data || []).map((item) => ({
-          ...item,
-          location: extractLocationFromPayload(item.payload),
-          meeting_url: extractMeetingLinkFromPayload(item.payload),
-        }));
+        if (fallback.error && isMissingColumnError(fallback.error)) {
+          const legacyFallback = await supabaseAdmin
+            .from("calendly_bookings")
+            .select("id,event,invitee,start_time,end_time,location,meeting_url,status,created_at")
+            .order("start_time", { ascending: true });
+          if (legacyFallback.error) throw legacyFallback.error;
+          data = (legacyFallback.data || []).map((item) => ({
+            ...item,
+            payload: {},
+            invitee_email: null,
+            timezone: null,
+          }));
+        } else if (fallback.error) {
+          throw fallback.error;
+        } else {
+          data = (fallback.data || []).map((item) => ({
+            ...item,
+            location: item.location || extractLocationFromPayload(item.payload),
+            meeting_url: item.meeting_url || extractMeetingLinkFromPayload(item.payload),
+          }));
+        }
         error = null;
       } else {
         throw error;
@@ -1921,10 +1998,30 @@ app.get("/api/admin/submissions", async (req, res) => {
       return res.status(500).json({ error: "Supabase service role key not configured." });
     }
 
-    const { data, error } = await supabaseAdmin
+    let { data, error } = await supabaseAdmin
       .from("contact_submissions")
       .select("id,company,project,industry,status,created_at,full_name,work_email,company_website,company_size,data_type,dataset_size,timeline,project_description")
       .order("created_at", { ascending: false });
+
+    if (error && isMissingColumnError(error)) {
+      const fallback = await supabaseAdmin
+        .from("contact_submissions")
+        .select("id,company,project,industry,status,created_at")
+        .order("created_at", { ascending: false });
+      if (fallback.error) throw fallback.error;
+      data = (fallback.data || []).map((item) => ({
+        ...item,
+        full_name: null,
+        work_email: null,
+        company_website: null,
+        company_size: null,
+        data_type: null,
+        dataset_size: null,
+        timeline: null,
+        project_description: null,
+      }));
+      error = null;
+    }
 
     if (error) throw error;
     return res.status(200).json({ data });
@@ -1946,7 +2043,7 @@ app.get("/api/admin/inquiries", async (req, res) => {
       .order("created_at", { ascending: false });
 
     if (error) {
-      if (error.code === "42703") {
+      if (isMissingColumnError(error)) {
         const fallbackResult = await supabaseAdmin
           .from("contact_inquiries")
           .select("id,full_name,email,inquiry_type,message,created_at")
