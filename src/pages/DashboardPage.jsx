@@ -21,6 +21,7 @@ import {
   IconTrash,
   IconChevronLeft,
   IconVideo,
+  IconCheck,
 } from '@tabler/icons-react'
 import emailjs from '@emailjs/browser'
 import { supabase } from '../lib/supabaseClient'
@@ -50,6 +51,70 @@ const sanitizeListingDescription = (value = '') => {
 
   return root.innerHTML.trim()
 }
+
+const formatNameFromEmail = (email = '') =>
+  String(email || '')
+    .split('@')[0]
+    .replace(/[._-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ') || 'User'
+
+const normalizeProfileRole = (value = '') => {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (['super admin', 'super_admin', 'owner', 'admin'].includes(normalized)) return 'super_admin'
+  if (['hr admin', 'hr_admin', 'hr', 'recruiter', 'recruitment admin'].includes(normalized)) return 'hr_admin'
+  if (['sales / client manager', 'sales_client_manager', 'sales', 'client manager', 'sales manager'].includes(normalized)) {
+    return 'sales_client_manager'
+  }
+  return 'super_admin'
+}
+
+const profileRoleDefinitions = {
+  super_admin: {
+    label: 'Super Admin',
+    description:
+      'Full system owner with complete control over users, data, and platform settings.',
+    access: [
+      'Full access to all modules',
+      'User management',
+      'Job listings and applications',
+      'Contact submissions and inquiries',
+      'Calendly bookings and settings',
+      'Analytics and reports',
+    ],
+  },
+  hr_admin: {
+    label: 'HR Admin',
+    description:
+      'Leads recruitment, manages job postings, and moves applicants through hiring stages.',
+    access: [
+      'Job listings',
+      'Job applications',
+      'AI analysis results',
+      'Pre-screening responses',
+      'Interview scheduling',
+      'Hiring stage updates',
+    ],
+  },
+  sales_client_manager: {
+    label: 'Sales / Client Manager',
+    description:
+      'Handles client-facing communication, demo bookings, and lead conversion workflows.',
+    access: [
+      'Contact submissions',
+      'Contact inquiries',
+      'Calendly bookings',
+      'Lead status tracking',
+      'Project details from submissions',
+      'No recruitment or system settings access',
+    ],
+  },
+}
+
+const profileRoleOptions = Object.values(profileRoleDefinitions).map((item) => item.label)
 
 const DashboardPage = ({ onNavigate = () => {} }) => {
   const [activePanel, setActivePanel] = useState('dashboard')
@@ -128,9 +193,34 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
   const [submissionIndustryFilter, setSubmissionIndustryFilter] = useState('')
   const [inquiryTypeFilter, setInquiryTypeFilter] = useState('')
   const [inquiryStatusFilter, setInquiryStatusFilter] = useState('')
+  const [profileRoleFilter, setProfileRoleFilter] = useState('')
+  const [systemLogsSearch, setSystemLogsSearch] = useState('')
   const [applicationPage, setApplicationPage] = useState(1)
   const [submissionPage, setSubmissionPage] = useState(1)
   const [inquiryPage, setInquiryPage] = useState(1)
+  const [actionPopup, setActionPopup] = useState({ open: false, title: '', message: '', tone: 'success' })
+  const [isProfileFormOpen, setIsProfileFormOpen] = useState(false)
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
+  const [isDeleteProfileModalOpen, setIsDeleteProfileModalOpen] = useState(false)
+  const [isEditingProfile, setIsEditingProfile] = useState(false)
+  const [isSavingProfile, setIsSavingProfile] = useState(false)
+  const [selectedProfile, setSelectedProfile] = useState(null)
+  const [profilePendingDelete, setProfilePendingDelete] = useState(null)
+  const [profileActionError, setProfileActionError] = useState('')
+  const [settingsForm, setSettingsForm] = useState({ name: '', currentPassword: '', password: '', confirmPassword: '' })
+  const [isSavingSettings, setIsSavingSettings] = useState(false)
+  const [settingsSection, setSettingsSection] = useState('account')
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    email: '',
+    role: 'Super Admin',
+    password: '',
+  })
+  const [editProfileForm, setEditProfileForm] = useState({
+    name: '',
+    email: '',
+    role: 'Super Admin',
+  })
   const [notifications, setNotifications] = useState([])
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const listingEditorRef = useRef(null)
@@ -157,6 +247,10 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
     if (normalized === 'reply sent' || normalized === 'replied') return 'Reply Sent'
     if (normalized === 'pending' || normalized === 'new') return 'Pending'
     return hasReply ? 'Reply Sent' : 'Pending'
+  }
+
+  const showActionPopup = (title, message, tone = 'success') => {
+    setActionPopup({ open: true, title, message, tone })
   }
 
   const navItems = [
@@ -1142,9 +1236,13 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       if (Array.isArray(profilesData?.data)) {
         setProfiles(
           profilesData.data.map((item) => ({
-            name: item.name,
+            id: item.id,
+            name: item.name || formatNameFromEmail(item.email),
+            email: item.email || '',
             role: item.role,
-            status: item.status,
+            roleKey: normalizeProfileRole(item.role),
+            status: item.status || 'Active',
+            createdAt: item.created_at || item.createdAt || '',
           }))
         )
       } else {
@@ -1224,6 +1322,14 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
     }, 2500)
     return () => window.clearTimeout(timeoutId)
   }, [isDeleteListingModalOpen, isListingFormOpen, isListingModalOpen, listingActionError, listingActionSuccess])
+
+  useEffect(() => {
+    if (!actionPopup.open) return
+    const timeoutId = window.setTimeout(() => {
+      setActionPopup((prev) => ({ ...prev, open: false }))
+    }, 2600)
+    return () => window.clearTimeout(timeoutId)
+  }, [actionPopup.open])
 
   const applicationTrend = useMemo(() => {
     const days = []
@@ -1445,13 +1551,15 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
 
   const filteredProfiles = useMemo(() => {
     const searchValue = listingSearch.trim().toLowerCase()
-    if (!searchValue) return profiles
-    return profiles.filter((item) =>
-      [item.name, item.role, item.status]
+    return profiles.filter((item) => {
+      const roleDefinition = profileRoleDefinitions[item.roleKey] || profileRoleDefinitions.super_admin
+      const matchesSearch = !searchValue || [item.name, item.email, item.role, roleDefinition.label, item.status]
         .filter(Boolean)
         .some((field) => field.toString().toLowerCase().includes(searchValue))
-      )
-  }, [listingSearch, profiles])
+      const matchesRole = profileRoleFilter ? roleDefinition.label === profileRoleFilter : true
+      return matchesSearch && matchesRole
+    })
+  }, [listingSearch, profileRoleFilter, profiles])
 
   const recordsPerPage = 10
 
@@ -1679,14 +1787,14 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
   }, [bookingViewDate, filteredMeetings, submissions])
 
   const filteredSystemLogs = useMemo(() => {
-    const searchValue = listingSearch.trim().toLowerCase()
+    const searchValue = systemLogsSearch.trim().toLowerCase()
     if (!searchValue) return systemLogs
     return systemLogs.filter((item) =>
       [item.time, item.activity, item.user]
         .filter(Boolean)
         .some((field) => field.toString().toLowerCase().includes(searchValue))
     )
-  }, [listingSearch, systemLogs])
+  }, [systemLogs, systemLogsSearch])
 
   const unreadNotificationCount = useMemo(
     () => notifications.filter((item) => !item.read).length,
@@ -1710,7 +1818,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       parsedUser = {}
     }
 
-    const name =
+    const fallbackName =
       parsedUser?.name ||
       parsedUser?.full_name ||
       parsedUser?.fullName ||
@@ -1718,7 +1826,10 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       'Current Admin'
 
     const email = parsedUser?.email || ''
-    const role = parsedUser?.role || storedRole || 'Admin'
+    const matchedProfile = profiles.find((item) => item.email && item.email === email)
+    const normalizedRoleKey = normalizeProfileRole(matchedProfile?.role || parsedUser?.role || storedRole || 'Admin')
+    const role = (profileRoleDefinitions[normalizedRoleKey] || profileRoleDefinitions.super_admin).label
+    const name = matchedProfile?.name || (email ? formatNameFromEmail(email) : fallbackName)
     const initials = String(name)
       .split(' ')
       .map((part) => part[0] || '')
@@ -1727,7 +1838,16 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       .toUpperCase()
 
     return { name, email, role, initials }
-  }, [])
+  }, [profiles])
+
+  const currentAdminRoleKey = useMemo(() => normalizeProfileRole(currentAdmin.role), [currentAdmin.role])
+
+  useEffect(() => {
+    setSettingsForm((prev) => ({
+      ...prev,
+      name: currentAdmin.name || '',
+    }))
+  }, [currentAdmin.name])
 
   const handleLogout = async () => {
     const token = localStorage.getItem('lwAuthToken') || ''
@@ -1918,6 +2038,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       ))
       setInquiryReplyDraft(replyBody)
       setInquiryReplySuccess('Reply has been sent.')
+      showActionPopup('Reply Sent', 'The inquiry reply was sent successfully.')
     } catch (error) {
       console.error(error)
       setInquiryReplyError('Failed to send reply.')
@@ -1933,16 +2054,17 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         method: 'DELETE',
       })
       if (!response.ok) {
-        throw new Error(`Failed to delete inquiry: ${response.status}`)
+        throw new Error(`Failed to archive inquiry: ${response.status}`)
       }
       setInquiries((prev) => prev.filter((item) => item.id !== inquiryId))
       setSelectedInquiry((prev) => (prev?.id === inquiryId ? null : prev))
       setIsInquiryModalOpen((prev) => (selectedInquiry?.id === inquiryId ? false : prev))
       setIsDeleteInquiryModalOpen(false)
       setInquiryPendingDelete(null)
+      showActionPopup('Inquiry Archived', 'The inquiry was moved to archived records.')
     } catch (error) {
       console.error(error)
-      setInquiryReplyError('Failed to delete inquiry.')
+      setInquiryReplyError('Failed to archive inquiry.')
     }
   }
 
@@ -1953,13 +2075,14 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         method: 'DELETE',
       })
       if (!response.ok) {
-        throw new Error(`Failed to delete submission: ${response.status}`)
+        throw new Error(`Failed to archive demo request: ${response.status}`)
       }
       setSubmissions((prev) => prev.filter((item) => item.id !== submissionId))
       setSelectedSubmission((prev) => (prev?.id === submissionId ? null : prev))
       setIsSubmissionModalOpen((prev) => (selectedSubmission?.id === submissionId ? false : prev))
       setIsDeleteSubmissionModalOpen(false)
       setSubmissionPendingDelete(null)
+      showActionPopup('Demo Request Archived', 'The demo request was moved to archived records.')
     } catch (error) {
       console.error(error)
     }
@@ -2131,6 +2254,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       })
       setApplicationActionSuccess('Final interview invitation sent.')
       setIsInterviewModalOpen(false)
+      showActionPopup('Interview Scheduled', 'The final interview invitation was sent successfully.')
     } catch (error) {
       console.error(error)
       setApplicationActionError('Failed to send the interview invitation.')
@@ -2197,6 +2321,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       })
       setApplicationActionSuccess('Rejection email sent.')
       setIsRejectApplicationModalOpen(false)
+      showActionPopup('Applicant Rejected', 'The rejection email was sent successfully.')
     } catch (error) {
       console.error(error)
       setApplicationActionError('Failed to send the rejection email.')
@@ -2295,7 +2420,8 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
     if (panel === 'profiles') {
       downloadCsv('profiles.csv', filteredProfiles.map((item) => ({
         Name: item.name,
-        Role: item.role,
+        Email: item.email,
+        Role: (profileRoleDefinitions[item.roleKey] || profileRoleDefinitions.super_admin).label,
         Status: item.status,
       })))
       return
@@ -2355,6 +2481,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       setIsDeleteApplicationModalOpen(false)
       setApplicationPendingDelete(null)
       await loadAdminData()
+      showActionPopup('Application Archived', 'The application was moved to archived records.')
     } catch (error) {
       console.error(error)
     }
@@ -2427,6 +2554,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         work_type: listingForm.workType,
         description: sanitizeListingDescription(listingForm.description),
         status: listingForm.status,
+        actor: currentAdmin.name,
       }
 
       const response = await fetch(`${apiBaseUrl}/api/admin/listings`, {
@@ -2452,6 +2580,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       })
       await loadAdminData()
       setListingActionSuccess('Job listing created successfully.')
+      showActionPopup('Job Listing Created', 'The new job listing was saved successfully.')
     } catch (error) {
       console.error(error)
       setListingActionError('Failed to create job listing.')
@@ -2493,6 +2622,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         work_type: editForm.workType,
         description: sanitizeListingDescription(editForm.description),
         status: editForm.status,
+        actor: currentAdmin.name,
       }
 
       const response = await fetch(`${apiBaseUrl}/api/admin/listings/${selectedListing.id}`, {
@@ -2508,6 +2638,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       await loadAdminData()
       setIsEditingListing(false)
       setListingActionSuccess('Job listing updated successfully.')
+      showActionPopup('Changes Saved', 'The job listing was updated successfully.')
     } catch (error) {
       console.error(error)
       setListingActionError('Failed to update job listing.')
@@ -2521,26 +2652,293 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
     try {
       const response = await fetch(`${apiBaseUrl}/api/admin/listings/${selectedListing.id}`, {
         method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          actor: currentAdmin.name,
+        }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to delete job listing.')
+        throw new Error('Failed to archive job listing.')
       }
 
       setIsDeleteListingModalOpen(false)
       setIsListingModalOpen(false)
       setSelectedListing(null)
       await loadAdminData()
-      setListingActionSuccess('Job listing deleted successfully.')
+      setListingActionSuccess('Job listing archived successfully.')
+      showActionPopup('Job Listing Archived', 'The job listing was moved to archived records.')
     } catch (error) {
       console.error(error)
-      setListingActionError('Failed to delete job listing.')
+      setListingActionError('Failed to archive job listing.')
     }
   }
 
   const requestDeleteListing = () => {
     if (!selectedListing?.id) return
     setIsDeleteListingModalOpen(true)
+  }
+
+  const clearProfileFilters = () => {
+    setProfileRoleFilter('')
+  }
+
+  const handleProfileFieldChange = (field, value) => {
+    setProfileForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }
+
+  const handleEditProfileFieldChange = (field, value) => {
+    setEditProfileForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }
+
+  const openProfileModal = (profile) => {
+    setProfileActionError('')
+    setSelectedProfile(profile)
+    setEditProfileForm({
+      name: profile?.name || '',
+      email: profile?.email || '',
+      role: (profileRoleDefinitions[profile?.roleKey] || profileRoleDefinitions.super_admin).label,
+    })
+    setIsEditingProfile(false)
+    setIsProfileModalOpen(true)
+  }
+
+  const resetProfileForm = () => {
+    setProfileForm({
+      name: '',
+      email: '',
+      role: 'Super Admin',
+      password: '',
+    })
+  }
+
+  const handleCreateProfile = async () => {
+    if (!apiBaseUrl) return
+    setIsSavingProfile(true)
+    setProfileActionError('')
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/admin/profiles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: profileForm.name,
+          email: profileForm.email,
+          role: profileForm.role,
+          password: profileForm.password,
+        }),
+      })
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(payload?.error || 'Failed to create user.')
+      }
+
+      resetProfileForm()
+      setIsProfileFormOpen(false)
+      await loadAdminData()
+      showActionPopup('User Created', 'The user account was created successfully.')
+    } catch (error) {
+      console.error(error)
+      setProfileActionError('')
+      showActionPopup('Failed to Create User', error.message || 'Failed to create user.', 'error')
+    } finally {
+      setIsSavingProfile(false)
+    }
+  }
+
+  const handleUpdateProfile = async () => {
+    if (!apiBaseUrl || !selectedProfile?.id) return
+    setIsSavingProfile(true)
+    setProfileActionError('')
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/admin/profiles/${selectedProfile.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: editProfileForm.name,
+          email: editProfileForm.email,
+          role: editProfileForm.role,
+        }),
+      })
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(payload?.error || 'Failed to update user.')
+      }
+
+      await loadAdminData()
+      setSelectedProfile((prev) => (
+        prev
+          ? {
+            ...prev,
+            name: editProfileForm.name,
+            email: editProfileForm.email,
+            role: editProfileForm.role,
+            roleKey: normalizeProfileRole(editProfileForm.role),
+          }
+          : prev
+      ))
+      setIsEditingProfile(false)
+      showActionPopup('User Updated', 'The user profile was updated successfully.')
+    } catch (error) {
+      console.error(error)
+      setProfileActionError(error.message || 'Failed to update user.')
+      showActionPopup('Failed to Update User', error.message || 'Failed to update user.', 'error')
+    } finally {
+      setIsSavingProfile(false)
+    }
+  }
+
+  const requestDeleteProfile = () => {
+    if (!selectedProfile?.id) return
+    setProfilePendingDelete(selectedProfile)
+    setIsDeleteProfileModalOpen(true)
+  }
+
+  const handleDeleteProfile = async () => {
+    if (!apiBaseUrl || !profilePendingDelete?.id) return
+    setIsSavingProfile(true)
+    setProfileActionError('')
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/admin/profiles/${profilePendingDelete.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(payload?.error || 'Failed to delete user.')
+      }
+
+      setIsDeleteProfileModalOpen(false)
+      setProfilePendingDelete(null)
+      setIsProfileModalOpen(false)
+      setSelectedProfile(null)
+      await loadAdminData()
+      showActionPopup('User Deleted', 'The user account was removed successfully.')
+    } catch (error) {
+      console.error(error)
+      setProfileActionError(error.message || 'Failed to delete user.')
+      showActionPopup('Failed to Delete User', error.message || 'Failed to delete user.', 'error')
+    } finally {
+      setIsSavingProfile(false)
+    }
+  }
+
+  const handleSettingsFieldChange = (field, value) => {
+    setSettingsForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }
+
+  const handleSaveSettings = async () => {
+    const token =
+      localStorage.getItem('lwAuthToken') ||
+      sessionStorage.getItem('lwAuthToken') ||
+      ''
+
+    if (!token || !apiBaseUrl) {
+      showActionPopup('Failed to Update Account', 'Your session is unavailable. Please log in again.', 'error')
+      return
+    }
+
+    const trimmedName = settingsForm.name.trim()
+    const currentPassword = settingsForm.currentPassword
+    const nextPassword = settingsForm.password
+    const confirmPassword = settingsForm.confirmPassword
+
+    if (!trimmedName) {
+      showActionPopup('Failed to Update Account', 'Name is required.', 'error')
+      return
+    }
+    if (nextPassword && nextPassword.length < 8) {
+      showActionPopup('Failed to Update Account', 'Password must be at least 8 characters.', 'error')
+      return
+    }
+    if (nextPassword && !currentPassword) {
+      showActionPopup('Failed to Update Account', 'Current password is required.', 'error')
+      return
+    }
+    if (nextPassword && nextPassword !== confirmPassword) {
+      showActionPopup('Failed to Update Account', 'Password confirmation does not match.', 'error')
+      return
+    }
+
+    setIsSavingSettings(true)
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/admin/account`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: trimmedName,
+          current_password: currentPassword || undefined,
+          password: nextPassword || undefined,
+        }),
+      })
+
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to update account.')
+      }
+
+      const storedUser =
+        localStorage.getItem('lwAuthUser') ||
+        sessionStorage.getItem('lwAuthUser') ||
+        '{}'
+      let parsedUser = {}
+      try {
+        parsedUser = JSON.parse(storedUser)
+      } catch (_error) {
+        parsedUser = {}
+      }
+
+      const nextUser = {
+        ...parsedUser,
+        name: payload?.data?.name || trimmedName,
+        full_name: payload?.data?.name || trimmedName,
+      }
+
+      if (localStorage.getItem('lwAuthUser')) {
+        localStorage.setItem('lwAuthUser', JSON.stringify(nextUser))
+      }
+      if (sessionStorage.getItem('lwAuthUser')) {
+        sessionStorage.setItem('lwAuthUser', JSON.stringify(nextUser))
+      }
+
+      setProfiles((prev) => prev.map((item) => (
+        item.email === currentAdmin.email
+          ? { ...item, name: payload?.data?.name || trimmedName }
+          : item
+      )))
+      setSettingsForm((prev) => ({
+        ...prev,
+        name: payload?.data?.name || trimmedName,
+        currentPassword: '',
+        password: '',
+        confirmPassword: '',
+      }))
+      showActionPopup('Account Updated', 'Your profile changes were saved successfully.')
+    } catch (error) {
+      console.error(error)
+      showActionPopup('Failed to Update Account', error.message || 'Failed to update account.', 'error')
+    } finally {
+      setIsSavingSettings(false)
+    }
   }
 
   const renderDashboardOverview = () => (
@@ -2811,11 +3209,6 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
           {listingActionError}
         </div>
       ) : null}
-      {listingActionSuccess ? (
-        <div className="admin-rich-editor is-readonly admin-application-note admin-application-status-note is-success">
-          {listingActionSuccess}
-        </div>
-      ) : null}
       <AnimatePresence>
         {isListingFormOpen ? (
           <motion.div
@@ -2851,11 +3244,6 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
               {listingActionError ? (
                 <div className="admin-rich-editor is-readonly admin-application-note admin-application-status-note is-error">
                   {listingActionError}
-                </div>
-              ) : null}
-              {listingActionSuccess ? (
-                <div className="admin-rich-editor is-readonly admin-application-note admin-application-status-note is-success">
-                  {listingActionSuccess}
                 </div>
               ) : null}
               <div className="admin-form-grid">
@@ -3535,41 +3923,216 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
     <div className="admin-panel-shell">
       <section className="admin-panel-head">
         <div>
-          <h1>User Profiles</h1>
-          <p>Manage users, assign roles, and review activity history.</p>
-        </div>
-        <div className="admin-panel-actions">
-          <button type="button" className="admin-btn ghost">Role Filters</button>
-          <button type="button" className="admin-btn">Create User</button>
+          <h1>Users</h1>
+          <p>Manage admin users, their name, email address, and assigned role.</p>
         </div>
       </section>
-      <section className="admin-card-grid">
-        {filteredProfiles.map((profile) => (
-          <article key={profile.name} className="admin-card">
+      {currentAdminRoleKey !== 'super_admin' ? (
+        <section className="admin-card-grid">
+          <article className="admin-card full">
             <div className="admin-card-top">
               <div>
-                <h3>{profile.name}</h3>
-                <p>{profile.role}</p>
+                <h3>Super Admin Access Required</h3>
+                <p>Only Super Admin users can manage user accounts, roles, and access.</p>
               </div>
-              <span className={`status ${profile.status.toLowerCase()}`}>{profile.status}</span>
-            </div>
-            <div className="admin-card-meta">
-              <div>
-                <strong>{profile.role}</strong>
-                <span>Role</span>
-              </div>
-              <div>
-                <strong>{profile.status}</strong>
-                <span>Status</span>
-              </div>
-            </div>
-            <div className="admin-card-actions">
-              <button type="button" className="admin-link">Edit Profile</button>
-              <button type="button" className="admin-link">View Activity</button>
+              <span className="status paused">Restricted</span>
             </div>
           </article>
-        ))}
-      </section>
+        </section>
+      ) : (
+        <>
+          <div className="admin-listing-controls admin-users-controls">
+            <div className="admin-listing-filters">
+              <select
+                value={profileRoleFilter}
+                onChange={(event) => setProfileRoleFilter(event.target.value)}
+              >
+                <option value="">All roles</option>
+                {profileRoleOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+              <button type="button" className="admin-listing-clear" onClick={clearProfileFilters}>
+                Clear Filters
+              </button>
+            </div>
+            <button
+              type="button"
+              className={`admin-listing-add ${isProfileFormOpen ? 'is-open' : ''}`}
+              aria-label={isProfileFormOpen ? 'Close user form' : 'Add user'}
+              onClick={() => {
+                setProfileActionError('')
+                setIsProfileFormOpen((prev) => !prev)
+              }}
+            >
+              <IconPlus size={18} />
+            </button>
+          </div>
+          <div className="admin-listing-count">
+            Showing {filteredProfiles.length} of {profiles.length} users
+          </div>
+          <AnimatePresence>
+            {isProfileFormOpen ? (
+              <motion.div
+                className="admin-listing-modal-overlay"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsProfileFormOpen(false)}
+              >
+                <motion.section
+                  className="admin-listing-modal"
+                  initial={{ opacity: 0, y: 18, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 12, scale: 0.97 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    className="dashboard-profile-modal-close"
+                    aria-label="Close user form"
+                    onClick={() => setIsProfileFormOpen(false)}
+                  >
+                    <IconX size={18} />
+                  </button>
+                  <div className="admin-listing-modal-head">
+                    <div>
+                      <h2>Add User</h2>
+                      <p>Create a new admin user account.</p>
+                    </div>
+                    <span className="status active">New</span>
+                  </div>
+                  <div className="admin-form-grid">
+                    <label>
+                      Name
+                      <input
+                        type="text"
+                        value={profileForm.name}
+                        onChange={(event) => handleProfileFieldChange('name', event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Email
+                      <input
+                        type="email"
+                        value={profileForm.email}
+                        onChange={(event) => handleProfileFieldChange('email', event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Role
+                      <select
+                        value={profileForm.role}
+                        onChange={(event) => handleProfileFieldChange('role', event.target.value)}
+                      >
+                        {profileRoleOptions.map((option) => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Temporary Password
+                      <input
+                        type="password"
+                        value={profileForm.password}
+                        onChange={(event) => handleProfileFieldChange('password', event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <div className="admin-form-actions">
+                    <button type="button" className="admin-btn ghost" onClick={() => setIsProfileFormOpen(false)}>
+                      Cancel
+                    </button>
+                    <button type="button" className="admin-btn" onClick={handleCreateProfile} disabled={isSavingProfile}>
+                      {isSavingProfile ? 'Saving...' : 'Save User'}
+                    </button>
+                  </div>
+                </motion.section>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+          <section className="admin-card-grid admin-listing-grid">
+            {profiles.length === 0 ? (
+              <article className="admin-card">
+                <div className="admin-card-top">
+                  <div>
+                    <h3>No users yet</h3>
+                    <p>Create a user to grant admin access.</p>
+                  </div>
+                  <span className="status paused">Empty</span>
+                </div>
+              </article>
+            ) : filteredProfiles.length === 0 ? (
+              <article className="admin-card">
+                <div className="admin-card-top">
+                  <div>
+                    <h3>No users match your filters</h3>
+                    <p>Try adjusting the search or selected role filter.</p>
+                  </div>
+                  <span className="status paused">Filtered</span>
+                </div>
+              </article>
+            ) : filteredProfiles.map((profile) => {
+              const roleDefinition = profileRoleDefinitions[profile.roleKey] || profileRoleDefinitions.super_admin
+              return (
+                <article
+                  key={profile.id || profile.email || profile.name}
+                  className="admin-card admin-listing-card admin-card-clickable"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openProfileModal(profile)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      openProfileModal(profile)
+                    }
+                  }}
+                >
+                  <div className="admin-listing-head">
+                    <h3 className="admin-listing-title">{profile.name}</h3>
+                    <span className={`status ${(profile.status || 'Active').toLowerCase()}`}>
+                      {profile.status || 'Active'}
+                    </span>
+                  </div>
+
+                  <div className="admin-listing-tags">
+                    <span className="admin-listing-pill department">
+                      <IconUserShield size={16} />
+                      {roleDefinition.label}
+                    </span>
+                  </div>
+
+                  <p className="admin-listing-desc">{roleDefinition.description}</p>
+
+                  <div className="admin-listing-footer">
+                  <div className="admin-listing-metric">
+                      <strong>{roleDefinition.label}</strong>
+                      <span>Assigned Role</span>
+                    </div>
+                    <div className="admin-listing-divider" />
+                    <div className="admin-listing-metric">
+                      <strong>{formatDateShort(profile.createdAt)}</strong>
+                      <span>Created</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-listing-cta"
+                      aria-label="View user details"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        openProfileModal(profile)
+                      }}
+                    >
+                      <IconChevronRight size={20} />
+                    </button>
+                  </div>
+                </article>
+              )
+            })}
+          </section>
+        </>
+      )}
     </div>
   )
 
@@ -3578,62 +4141,195 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       <section className="admin-panel-head">
         <div>
           <h1>Settings</h1>
-          <p>Configure notifications, permissions, and audit logs.</p>
-        </div>
-        <div className="admin-panel-actions">
-          <button type="button" className="admin-btn ghost">Save Changes</button>
-          <button type="button" className="admin-btn">Add Integration</button>
+          <p>Manage your account details, security settings, and access overview.</p>
         </div>
       </section>
-      <section className="admin-settings-grid">
-        <article className="admin-card">
-          <div className="admin-card-top">
-            <div>
-              <h3>General Settings</h3>
-              <p>Email notifications, privacy, integrations.</p>
-            </div>
+      <section className="admin-settings-layout">
+        <aside className="admin-settings-sidebar">
+          <div className="admin-settings-nav">
+            <button
+              type="button"
+              className={settingsSection === 'account' ? 'is-active' : ''}
+              onClick={() => setSettingsSection('account')}
+            >
+              <strong>Account</strong>
+              <span>Profile and account preferences</span>
+            </button>
+            <button
+              type="button"
+              className={settingsSection === 'security' ? 'is-active' : ''}
+              onClick={() => setSettingsSection('security')}
+            >
+              <strong>Security</strong>
+              <span>Password and sign-in settings</span>
+            </button>
+            <button
+              type="button"
+              className={settingsSection === 'access' ? 'is-active' : ''}
+              onClick={() => setSettingsSection('access')}
+            >
+              <strong>Access</strong>
+              <span>Role and permissions overview</span>
+            </button>
+            {currentAdminRoleKey === 'super_admin' ? (
+              <button
+                type="button"
+                className={settingsSection === 'logs' ? 'is-active' : ''}
+                onClick={() => setSettingsSection('logs')}
+              >
+                <strong>System Logs</strong>
+                <span>Audit trail and administrative activity</span>
+              </button>
+            ) : null}
           </div>
-          <ul className="admin-setting-list">
-            <li>Weekly digest enabled</li>
-            <li>Applicant GDPR export enabled</li>
-            <li>Calendly API connected</li>
-          </ul>
-          <button type="button" className="admin-link">Edit Settings</button>
-        </article>
-        <article className="admin-card">
-          <div className="admin-card-top">
-            <div>
-              <h3>Role Management</h3>
-              <p>Role-based access for admins, recruiters, and users.</p>
-            </div>
-          </div>
-          <ul className="admin-setting-list">
-            <li>Owner: full access</li>
-            <li>Recruiter: listings + applications</li>
-            <li>User: read-only insights</li>
-          </ul>
-          <button type="button" className="admin-link">Update Roles</button>
-        </article>
-        <article className="admin-card full">
-          <div className="admin-card-top">
-            <div>
-              <h3>System Logs</h3>
-              <p>Audit trail of recent administrative actions.</p>
-            </div>
-            <button type="button" className="admin-btn ghost">View Logs</button>
-          </div>
-          <div className="admin-log-list">
-            {filteredSystemLogs.map((log) => (
-              <div key={`${log.time}-${log.activity}`} className="admin-log-item">
-                <strong>{log.time}</strong>
+        </aside>
+
+        <div className="admin-settings-content">
+          {settingsSection === 'account' ? (
+            <article className="admin-settings-panel">
+              <div className="admin-settings-panel-head">
                 <div>
-                  <p>{log.activity}</p>
-                  <span>{log.user}</span>
+                  <h3>Profile</h3>
+                  <p>Update your display name. Your email address is shown for reference only.</p>
                 </div>
               </div>
-            ))}
-          </div>
-        </article>
+              <div className="admin-form-grid">
+                <label className="full">
+                  Name
+                  <input
+                    type="text"
+                    value={settingsForm.name}
+                    onChange={(event) => handleSettingsFieldChange('name', event.target.value)}
+                  />
+                </label>
+                <label className="full">
+                  Email Address
+                  <input
+                    type="email"
+                    value={currentAdmin.email || ''}
+                    readOnly
+                  />
+                </label>
+              </div>
+              <div className="admin-form-actions admin-settings-actions">
+                <button type="button" className="admin-btn" onClick={handleSaveSettings} disabled={isSavingSettings}>
+                  {isSavingSettings ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </article>
+          ) : null}
+
+          {settingsSection === 'security' ? (
+            <article className="admin-settings-panel">
+              <div className="admin-settings-panel-head">
+                <div>
+                  <h3>Security</h3>
+                  <p>Set a new password for your current admin account.</p>
+                </div>
+              </div>
+              <div className="admin-form-grid">
+                <label>
+                  Current Password
+                  <input
+                    type="password"
+                    value={settingsForm.currentPassword}
+                    onChange={(event) => handleSettingsFieldChange('currentPassword', event.target.value)}
+                  />
+                </label>
+                <label>
+                  New Password
+                  <input
+                    type="password"
+                    value={settingsForm.password}
+                    onChange={(event) => handleSettingsFieldChange('password', event.target.value)}
+                  />
+                </label>
+                <label>
+                  Confirm Password
+                  <input
+                    type="password"
+                    value={settingsForm.confirmPassword}
+                    onChange={(event) => handleSettingsFieldChange('confirmPassword', event.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="admin-form-actions admin-settings-actions">
+                <button type="button" className="admin-btn" onClick={handleSaveSettings} disabled={isSavingSettings}>
+                  {isSavingSettings ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </article>
+          ) : null}
+
+          {settingsSection === 'access' ? (
+            <article className="admin-settings-panel">
+              <div className="admin-settings-panel-head">
+                <div>
+                  <h3>Access Level</h3>
+                  <p>Your current role determines what modules are available in the dashboard.</p>
+                </div>
+              </div>
+              <div className="admin-settings-role-card">
+                <div className="admin-settings-role-top">
+                  <strong>{currentAdmin.role}</strong>
+                  <span className={`status ${currentAdminRoleKey === 'super_admin' ? 'active' : 'pending'}`}>
+                    {currentAdmin.role}
+                  </span>
+                </div>
+                <p>{(profileRoleDefinitions[currentAdminRoleKey] || profileRoleDefinitions.super_admin).description}</p>
+                <ul className="admin-setting-list admin-setting-checklist">
+                  {(profileRoleDefinitions[currentAdminRoleKey] || profileRoleDefinitions.super_admin).access.map((item) => (
+                    <li key={item}>
+                      <span className="admin-setting-check-icon" aria-hidden="true">
+                        <IconCheck size={14} />
+                      </span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </article>
+          ) : null}
+
+          {settingsSection === 'logs' && currentAdminRoleKey === 'super_admin' ? (
+            <article className="admin-settings-panel">
+              <div className="admin-settings-panel-head">
+                <div>
+                  <h3>System Logs</h3>
+                  <p>Audit trail of recent administrative actions.</p>
+                </div>
+                <button
+                  type="button"
+                  className="admin-btn admin-export-btn"
+                  onClick={() => handleExport('settings')}
+                >
+                  Export Logs
+                </button>
+              </div>
+              <div className="admin-settings-log-search">
+                <IconSearch size={16} />
+                <input
+                  type="search"
+                  placeholder="Search system logs"
+                  aria-label="Search system logs"
+                  value={systemLogsSearch}
+                  onChange={(event) => setSystemLogsSearch(event.target.value)}
+                />
+              </div>
+              <div className="admin-log-list">
+                {filteredSystemLogs.map((log) => (
+                  <div key={`${log.time}-${log.activity}`} className="admin-log-item">
+                    <strong>{log.time}</strong>
+                    <div>
+                      <p>{log.activity}</p>
+                      <span>{log.user}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ) : null}
+        </div>
       </section>
     </div>
   )
@@ -3664,7 +4360,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
             <div>
               <p>Signed in</p>
               <h3>{currentAdmin.name}</h3>
-              <span>{currentAdmin.role}{currentAdmin.email ? ` • ${currentAdmin.email}` : ''}</span>
+              <span>{currentAdmin.role}</span>
             </div>
             <div className="admin-sidebar-avatar" aria-hidden="true">
               {currentAdmin.initials}
@@ -3698,67 +4394,73 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         </aside>
         <section className="dashboard-basic-content admin-dashboard-content">
           <header className="admin-dashboard-topbar">
-            <div className="admin-search">
-              <IconSearch size={16} />
-              <input
-                type="search"
-                placeholder="Search listings, applications, demo requests, inquiries, users"
-                aria-label="Search dashboard"
-                value={listingSearch}
-                onChange={(event) => setListingSearch(event.target.value)}
-              />
-            </div>
-            <div className="admin-topbar-actions">
-              <div className="admin-notification-wrap">
-                <button
-                  type="button"
-                  className="admin-icon-btn"
-                  aria-label="Notifications"
-                  onClick={() => {
-                    setIsNotificationOpen((prev) => !prev)
-                    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-                      Notification.requestPermission().catch(() => null)
-                    }
-                  }}
-                >
-                  <IconBell size={18} />
-                  {unreadNotificationCount ? (
-                    <span className="admin-badge">{Math.min(unreadNotificationCount, 99)}</span>
-                  ) : null}
-                </button>
-                {isNotificationOpen ? (
-                  <div className="admin-notification-dropdown">
-                    <div className="admin-notification-head">
-                      <strong>Notifications</strong>
-                      <small>{notifications.length} total</small>
-                    </div>
-                    <div className="admin-notification-list">
-                      {notifications.length ? notifications.slice(0, 8).map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          className="admin-notification-item"
-                          onClick={() => {
-                            setActivePanel('applications')
-                            setIsNotificationOpen(false)
-                            const application = applications.find((entry) => entry.id === item.applicationId)
-                            if (application) openApplicationModal(application)
-                          }}
-                        >
-                          <b>{item.title}</b>
-                          <span>{item.description}</span>
-                          <small>{formatRelativeTime(item.createdAt)}</small>
-                        </button>
-                      )) : (
-                        <p className="admin-notification-empty">No notifications yet.</p>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
+            {activePanel !== 'settings' ? (
+              <div className="admin-search">
+                <IconSearch size={16} />
+                <input
+                  type="search"
+                  placeholder="Search listings, applications, demo requests, inquiries, users"
+                  aria-label="Search dashboard"
+                  value={listingSearch}
+                  onChange={(event) => setListingSearch(event.target.value)}
+                />
               </div>
-              <button type="button" className="admin-btn admin-export-btn" onClick={() => handleExport(activePanel)}>
-                Export
-              </button>
+            ) : <div />}
+            <div className="admin-topbar-actions">
+              {activePanel !== 'settings' ? (
+                <div className="admin-notification-wrap">
+                  <button
+                    type="button"
+                    className="admin-icon-btn"
+                    aria-label="Notifications"
+                    onClick={() => {
+                      setIsNotificationOpen((prev) => !prev)
+                      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+                        Notification.requestPermission().catch(() => null)
+                      }
+                    }}
+                  >
+                    <IconBell size={18} />
+                    {unreadNotificationCount ? (
+                      <span className="admin-badge">{Math.min(unreadNotificationCount, 99)}</span>
+                    ) : null}
+                  </button>
+                  {isNotificationOpen ? (
+                    <div className="admin-notification-dropdown">
+                      <div className="admin-notification-head">
+                        <strong>Notifications</strong>
+                        <small>{notifications.length} total</small>
+                      </div>
+                      <div className="admin-notification-list">
+                        {notifications.length ? notifications.slice(0, 8).map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className="admin-notification-item"
+                            onClick={() => {
+                              setActivePanel('applications')
+                              setIsNotificationOpen(false)
+                              const application = applications.find((entry) => entry.id === item.applicationId)
+                              if (application) openApplicationModal(application)
+                            }}
+                          >
+                            <b>{item.title}</b>
+                            <span>{item.description}</span>
+                            <small>{formatRelativeTime(item.createdAt)}</small>
+                          </button>
+                        )) : (
+                          <p className="admin-notification-empty">No notifications yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              {activePanel !== 'settings' ? (
+                <button type="button" className="admin-btn admin-export-btn" onClick={() => handleExport(activePanel)}>
+                  Export
+                </button>
+              ) : null}
             </div>
           </header>
 
@@ -3853,11 +4555,6 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
               {listingActionError ? (
                 <div className="admin-rich-editor is-readonly admin-application-note admin-application-status-note is-error">
                   {listingActionError}
-                </div>
-              ) : null}
-              {listingActionSuccess ? (
-                <div className="admin-rich-editor is-readonly admin-application-note admin-application-status-note is-success">
-                  {listingActionSuccess}
                 </div>
               ) : null}
 
@@ -3999,14 +4696,14 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
               </button>
               <div className="admin-listing-modal-head admin-application-head">
                 <div className="admin-application-head-copy">
-                  <h2>Delete Job Listing</h2>
+                  <h2>Archive Job Listing</h2>
                   <p>{selectedListing?.title || 'This listing'}</p>
                 </div>
               </div>
               <div className="admin-application-body">
                 <div className="admin-application-scroll">
                   <div className="admin-rich-editor is-readonly admin-application-note">
-                    This will permanently delete the job listing. This action cannot be undone.
+                    This will move the job listing to archived records. You can restore it at any time.
                   </div>
                 </div>
               </div>
@@ -4015,7 +4712,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                   Cancel
                 </button>
                 <button type="button" className="admin-btn danger" onClick={handleDeleteListing}>
-                  Delete
+                  Archive
                 </button>
               </div>
             </motion.section>
@@ -4640,7 +5337,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                   className="admin-btn danger"
                   onClick={() => requestDeleteSubmission(selectedSubmission)}
                 >
-                  Delete Demo Request
+                  Archive Demo Request
                 </button>
               </div>
             </motion.section>
@@ -4651,7 +5348,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       <AnimatePresence>
         {isDeleteSubmissionModalOpen ? (
           <motion.div
-            className="dashboard-logout-modal-overlay"
+            className="admin-listing-modal-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -4661,10 +5358,10 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
             }}
           >
             <motion.section
-              className="dashboard-logout-modal"
-              initial={{ opacity: 0, y: 12, scale: 0.97 }}
+              className="admin-listing-modal admin-application-modal"
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              exit={{ opacity: 0, y: 12, scale: 0.97 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
               onClick={(event) => event.stopPropagation()}
             >
@@ -4679,13 +5376,23 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
               >
                 <IconX size={18} />
               </button>
-              <h3>Delete Demo Request</h3>
-              <p>
-                Are you sure you want to delete the demo request from {submissionPendingDelete?.company || 'this company'}?
-              </p>
-              <div className="dashboard-logout-modal-actions">
+              <div className="admin-listing-modal-head admin-application-head">
+                <div className="admin-application-head-copy">
+                  <h2>Archive Demo Request</h2>
+                  <p>{submissionPendingDelete?.company || 'This company'}</p>
+                </div>
+              </div>
+              <div className="admin-application-body">
+                <div className="admin-application-scroll">
+                  <div className="admin-rich-editor is-readonly admin-application-note">
+                    This will move the demo request to archived records. You can restore it at any time.
+                  </div>
+                </div>
+              </div>
+              <div className="admin-form-actions admin-application-footer">
                 <button
                   type="button"
+                  className="admin-btn ghost"
                   onClick={() => {
                     setIsDeleteSubmissionModalOpen(false)
                     setSubmissionPendingDelete(null)
@@ -4695,10 +5402,10 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                 </button>
                 <button
                   type="button"
-                  className="confirm"
+                  className="admin-btn danger"
                   onClick={() => handleDeleteSubmission(submissionPendingDelete?.id)}
                 >
-                  Delete
+                  Archive
                 </button>
               </div>
             </motion.section>
@@ -4835,7 +5542,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       <AnimatePresence>
         {isDeleteInquiryModalOpen ? (
           <motion.div
-            className="dashboard-logout-modal-overlay"
+            className="admin-listing-modal-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -4845,10 +5552,10 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
             }}
           >
             <motion.section
-              className="dashboard-logout-modal"
-              initial={{ opacity: 0, y: 12, scale: 0.97 }}
+              className="admin-listing-modal admin-application-modal"
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              exit={{ opacity: 0, y: 12, scale: 0.97 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
               onClick={(event) => event.stopPropagation()}
             >
@@ -4863,13 +5570,23 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
               >
                 <IconX size={18} />
               </button>
-              <h3>Delete Inquiry</h3>
-              <p>
-                Are you sure you want to delete the inquiry from {inquiryPendingDelete?.fullName || 'this contact'}?
-              </p>
-              <div className="dashboard-logout-modal-actions">
+              <div className="admin-listing-modal-head admin-application-head">
+                <div className="admin-application-head-copy">
+                  <h2>Archive Inquiry</h2>
+                  <p>{inquiryPendingDelete?.fullName || 'This contact'}</p>
+                </div>
+              </div>
+              <div className="admin-application-body">
+                <div className="admin-application-scroll">
+                  <div className="admin-rich-editor is-readonly admin-application-note">
+                    This will move the inquiry to archived records. You can restore it at any time.
+                  </div>
+                </div>
+              </div>
+              <div className="admin-form-actions admin-application-footer">
                 <button
                   type="button"
+                  className="admin-btn ghost"
                   onClick={() => {
                     setIsDeleteInquiryModalOpen(false)
                     setInquiryPendingDelete(null)
@@ -4879,14 +5596,200 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                 </button>
                 <button
                   type="button"
-                  className="confirm"
+                  className="admin-btn danger"
                   onClick={() => handleDeleteInquiry(inquiryPendingDelete?.id)}
                 >
-                  Delete
+                  Archive
                 </button>
               </div>
             </motion.section>
           </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isProfileModalOpen ? (
+          <motion.div
+            className="admin-listing-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsProfileModalOpen(false)}
+          >
+            <motion.section
+              className="admin-listing-modal"
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.97 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="dashboard-profile-modal-close"
+                aria-label="Close user modal"
+                onClick={() => setIsProfileModalOpen(false)}
+              >
+                <IconX size={18} />
+              </button>
+              <div className="admin-listing-modal-head">
+                <div>
+                  <h2>User Details</h2>
+                  <p>{selectedProfile?.name || 'User account'}</p>
+                </div>
+                <span className={`status ${(selectedProfile?.status || 'Active').toLowerCase()}`}>
+                  {selectedProfile?.status || 'Active'}
+                </span>
+              </div>
+              <div className="admin-form-grid">
+                <label>
+                  Name
+                  <input
+                    type="text"
+                    value={editProfileForm.name}
+                    onChange={(event) => handleEditProfileFieldChange('name', event.target.value)}
+                    disabled={!isEditingProfile}
+                  />
+                </label>
+                <label>
+                  Email
+                  <input
+                    type="email"
+                    value={editProfileForm.email}
+                    onChange={(event) => handleEditProfileFieldChange('email', event.target.value)}
+                    disabled={!isEditingProfile}
+                  />
+                </label>
+                <label>
+                  Role
+                  <select
+                    value={editProfileForm.role}
+                    onChange={(event) => handleEditProfileFieldChange('role', event.target.value)}
+                    disabled={!isEditingProfile}
+                  >
+                    {profileRoleOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="admin-form-actions">
+                {!isEditingProfile ? (
+                  <>
+                    <button type="button" className="admin-btn ghost" onClick={() => setIsEditingProfile(true)}>
+                      Edit
+                    </button>
+                    <button type="button" className="admin-btn danger" onClick={requestDeleteProfile}>
+                      Delete
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="admin-btn ghost" onClick={() => setIsEditingProfile(false)}>
+                      Cancel
+                    </button>
+                    <button type="button" className="admin-btn" onClick={handleUpdateProfile} disabled={isSavingProfile}>
+                      {isSavingProfile ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </motion.section>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isDeleteProfileModalOpen ? (
+          <motion.div
+            className="admin-listing-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              setIsDeleteProfileModalOpen(false)
+              setProfilePendingDelete(null)
+            }}
+          >
+            <motion.section
+              className="admin-listing-modal admin-application-modal"
+              initial={{ opacity: 0, y: 18, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.97 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="dashboard-profile-modal-close"
+                aria-label="Close delete user confirmation"
+                onClick={() => {
+                  setIsDeleteProfileModalOpen(false)
+                  setProfilePendingDelete(null)
+                }}
+              >
+                <IconX size={18} />
+              </button>
+              <div className="admin-listing-modal-head admin-application-head">
+                <div className="admin-application-head-copy">
+                  <h2>Delete User</h2>
+                  <p>{profilePendingDelete?.name || 'This user'}</p>
+                </div>
+              </div>
+              <div className="admin-application-body">
+                <div className="admin-application-scroll">
+                  <div className="admin-rich-editor is-readonly admin-application-note">
+                    This will permanently remove the user account and access. This action cannot be undone.
+                  </div>
+                </div>
+              </div>
+              <div className="admin-form-actions admin-application-footer">
+                <button
+                  type="button"
+                  className="admin-btn ghost"
+                  onClick={() => {
+                    setIsDeleteProfileModalOpen(false)
+                    setProfilePendingDelete(null)
+                  }}
+                >
+                  Cancel
+                </button>
+                <button type="button" className="admin-btn danger" onClick={handleDeleteProfile} disabled={isSavingProfile}>
+                  {isSavingProfile ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </motion.section>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {actionPopup.open ? (
+          <motion.aside
+            className={`admin-action-popup is-${actionPopup.tone || 'success'}`}
+            initial={{ opacity: 0, y: -12, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            role="status"
+            aria-live="polite"
+          >
+            <div className="admin-action-popup-icon" aria-hidden="true">
+              {actionPopup.tone === 'error' ? <IconX size={18} /> : <IconCheck size={18} />}
+            </div>
+            <div className="admin-action-popup-copy">
+              <strong>{actionPopup.title}</strong>
+              <span>{actionPopup.message}</span>
+            </div>
+            <button
+              type="button"
+              className="admin-action-popup-close"
+              aria-label="Dismiss notification"
+              onClick={() => setActionPopup({ open: false, title: '', message: '', tone: 'success' })}
+            >
+              <IconX size={16} />
+            </button>
+          </motion.aside>
         ) : null}
       </AnimatePresence>
     </main>

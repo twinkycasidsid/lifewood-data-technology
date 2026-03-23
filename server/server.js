@@ -5,6 +5,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { fileURLToPath } from "url";
 import path from "path";
 import {
+  createAnonClient,
   createUserClient,
   supabaseAdmin,
   supabaseAdminReady,
@@ -89,6 +90,17 @@ const ensureSupabaseConfigured = (res) => {
 
 const normalizeText = (value = "") => String(value || "").replace(/\s+/g, " ").trim();
 const isValidBasicEmail = (value = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+const formatProfileNameFromEmail = (email = "") => {
+  const localPart = String(email || "").split("@")[0];
+  if (!localPart) return "User";
+  return localPart
+    .replace(/[._-]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
 const normalizeInquiryStatus = (value = "", hasReply = false) => {
   const normalized = String(value || "").trim().toLowerCase();
   if (normalized === "reply sent" || normalized === "replied") return "Reply Sent";
@@ -143,6 +155,25 @@ const isMissingColumnError = (error) =>
   error?.code === "42703" ||
   error?.code === "PGRST204" ||
   /column/i.test(String(error?.message || ""));
+
+const isMissingTableOrColumnError = (error) =>
+  error?.code === "42P01" || isMissingColumnError(error);
+
+const logAdminActivity = async (activity = "", actor = "") => {
+  const normalizedActivity = normalizeText(activity);
+  if (!supabaseAdminReady || !normalizedActivity) return;
+
+  const result = await supabaseAdmin
+    .from("admin_activity_logs")
+    .insert({
+      activity: normalizedActivity,
+      actor: normalizeText(actor) || null,
+    });
+
+  if (result.error && !isMissingTableOrColumnError(result.error)) {
+    console.error("[admin-activity-log-failed]", result.error);
+  }
+};
 
 const syncCalendlyBookings = async () => {
   if (!supabaseAdminReady) {
@@ -1469,6 +1500,98 @@ app.post("/api/auth/logout", async (req, res) => {
   }
 });
 
+app.patch("/api/admin/account", async (req, res) => {
+  try {
+    if (!ensureSupabaseConfigured(res)) return;
+
+    const accessToken = resolveAuthToken(req);
+    if (!accessToken) {
+      return res.status(401).json({ error: "Missing access token." });
+    }
+
+    const name = normalizeText(req.body?.name || "");
+    const password = String(req.body?.password || "");
+    const currentPassword = String(req.body?.current_password || "");
+
+    if (!name && !password) {
+      return res.status(400).json({ error: "Nothing to update." });
+    }
+
+    const userClient = createUserClient(accessToken);
+    const {
+      data: { user },
+      error: userError,
+    } = await userClient.auth.getUser();
+
+    if (userError || !user) {
+      return res.status(401).json({ error: "Invalid session." });
+    }
+
+    const updatePayload = {};
+    if (name) {
+      updatePayload.data = {
+        name,
+        full_name: name,
+      };
+    }
+    if (password) {
+      if (password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters." });
+      }
+      if (!currentPassword) {
+        return res.status(400).json({ error: "Current password is required." });
+      }
+      const anonClient = createAnonClient();
+      const { error: signInError } = await anonClient.auth.signInWithPassword({
+        email: user.email || "",
+        password: currentPassword,
+      });
+      if (signInError) {
+        return res.status(401).json({ error: "Current password is incorrect." });
+      }
+      updatePayload.password = password;
+    }
+
+    const { data: updatedUserData, error: updateUserError } = await userClient.auth.updateUser(updatePayload);
+    if (updateUserError) throw updateUserError;
+
+    if (name && supabaseAdminReady) {
+      let updateProfileResult = await supabaseAdmin
+        .from("profiles")
+        .update({ name })
+        .eq("id", user.id)
+        .select("id,name,email,role,created_at")
+        .single();
+
+      if (updateProfileResult.error && isMissingColumnError(updateProfileResult.error)) {
+        updateProfileResult = { data: null, error: null };
+      }
+
+      if (updateProfileResult.error) throw updateProfileResult.error;
+    }
+
+    await logAdminActivity(
+      password ? "Updated account profile and password" : "Updated account profile",
+      name || formatProfileNameFromEmail(user.email || "")
+    );
+
+    return res.status(200).json({
+      data: {
+        id: user.id,
+        email: updatedUserData?.user?.email || user.email || "",
+        name:
+          updatedUserData?.user?.user_metadata?.name ||
+          updatedUserData?.user?.user_metadata?.full_name ||
+          name ||
+          formatProfileNameFromEmail(user.email),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Failed to update account." });
+  }
+});
+
 app.get("/api/health", (_req, res) => {
   return res.status(200).json({
     ok: true,
@@ -1588,6 +1711,7 @@ app.post("/api/admin/listings", async (req, res) => {
       description,
       overview,
       status,
+      actor,
     } = req.body || {};
 
     if (!title) {
@@ -1613,6 +1737,7 @@ app.post("/api/admin/listings", async (req, res) => {
       .single();
 
     if (error) throw error;
+    await logAdminActivity(`Created job listing: ${data?.title || title}`, actor);
     return res.status(201).json({ data });
   } catch (error) {
     console.error(error);
@@ -1635,6 +1760,7 @@ app.patch("/api/admin/listings/:id", async (req, res) => {
       work_type,
       description,
       status,
+      actor,
     } = req.body || {};
 
     if (!id) {
@@ -1663,6 +1789,7 @@ app.patch("/api/admin/listings/:id", async (req, res) => {
       .single();
 
     if (error) throw error;
+    await logAdminActivity(`Edited job listing: ${data?.title || title || "Untitled Listing"}`, actor);
     return res.status(200).json({ data });
   } catch (error) {
     console.error(error);
@@ -1677,8 +1804,50 @@ app.delete("/api/admin/listings/:id", async (req, res) => {
     }
 
     const { id } = req.params;
+    const actor = normalizeText(req.body?.actor || "");
     if (!id) {
       return res.status(400).json({ error: "Listing id is required." });
+    }
+
+    const { data: listing, error: listingError } = await supabaseAdmin
+      .from("job_listings")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (listingError || !listing) {
+      return res.status(404).json({ error: "Job listing not found." });
+    }
+
+    const archiveResult = await supabaseAdmin
+      .from("archived_job_listings")
+      .insert({
+        original_listing_id: listing.id,
+        slug: listing.slug || null,
+        title: listing.title || "Untitled Listing",
+        department: listing.department || null,
+        location: listing.location || null,
+        workplace: listing.workplace || null,
+        work_type: listing.work_type || null,
+        posted: listing.posted || null,
+        description: listing.description || null,
+        overview: Array.isArray(listing.overview) ? listing.overview : null,
+        status: listing.status || null,
+        applicants_count: listing.applicants_count ?? 0,
+        created_at: listing.created_at || null,
+        archived_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (archiveResult.error) {
+      if (isMissingTableOrColumnError(archiveResult.error)) {
+        return res.status(500).json({
+          error: "archived_job_listings is not set up yet. Run server/sql/archived_job_listings.sql.",
+        });
+      }
+
+      throw archiveResult.error;
     }
 
     const { error } = await supabaseAdmin
@@ -1687,10 +1856,11 @@ app.delete("/api/admin/listings/:id", async (req, res) => {
       .eq("id", id);
 
     if (error) throw error;
+    await logAdminActivity(`Archived job listing: ${listing.title || "Untitled Listing"}`, actor);
     return res.status(204).send();
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: "Failed to delete job listing." });
+    return res.status(500).json({ error: "Failed to archive job listing." });
   }
 });
 
@@ -1907,7 +2077,7 @@ app.delete("/api/admin/applications/:id", async (req, res) => {
       .single();
 
     if (archiveResult.error) {
-      if (archiveResult.error.code === "42P01" || archiveResult.error.code === "42703") {
+      if (isMissingTableOrColumnError(archiveResult.error)) {
         return res.status(500).json({
           error: "archived_job_applications is not set up yet. Run server/sql/archived_job_applications.sql.",
         });
@@ -1925,7 +2095,7 @@ app.delete("/api/admin/applications/:id", async (req, res) => {
     return res.status(204).send();
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: "Failed to delete application." });
+    return res.status(500).json({ error: "Failed to archive application." });
   }
 });
 
@@ -2193,6 +2363,43 @@ app.delete("/api/admin/inquiries/:id", async (req, res) => {
       return res.status(400).json({ error: "Inquiry id is required." });
     }
 
+    const { data: inquiry, error: inquiryError } = await supabaseAdmin
+      .from("contact_inquiries")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (inquiryError || !inquiry) {
+      return res.status(404).json({ error: "Inquiry not found." });
+    }
+
+    const archiveResult = await supabaseAdmin
+      .from("archived_contact_inquiries")
+      .insert({
+        original_inquiry_id: inquiry.id,
+        full_name: inquiry.full_name || "Unknown",
+        email: inquiry.email || null,
+        inquiry_type: inquiry.inquiry_type || null,
+        message: inquiry.message || null,
+        reply_message: inquiry.reply_message || null,
+        replied_at: inquiry.replied_at || null,
+        status: normalizeInquiryStatus(inquiry.status, Boolean(inquiry.reply_message || inquiry.replied_at)),
+        created_at: inquiry.created_at || null,
+        archived_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (archiveResult.error) {
+      if (isMissingTableOrColumnError(archiveResult.error)) {
+        return res.status(500).json({
+          error: "archived_contact_inquiries is not set up yet. Run server/sql/archived_contact_inquiries.sql.",
+        });
+      }
+
+      throw archiveResult.error;
+    }
+
     const { error } = await supabaseAdmin
       .from("contact_inquiries")
       .delete()
@@ -2202,7 +2409,7 @@ app.delete("/api/admin/inquiries/:id", async (req, res) => {
     return res.status(204).send();
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: "Failed to delete inquiry." });
+    return res.status(500).json({ error: "Failed to archive inquiry." });
   }
 });
 
@@ -2285,6 +2492,48 @@ app.delete("/api/admin/submissions/:id", async (req, res) => {
       return res.status(400).json({ error: "Submission id is required." });
     }
 
+    const { data: submission, error: submissionError } = await supabaseAdmin
+      .from("contact_submissions")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (submissionError || !submission) {
+      return res.status(404).json({ error: "Submission not found." });
+    }
+
+    const archiveResult = await supabaseAdmin
+      .from("archived_contact_submissions")
+      .insert({
+        original_submission_id: submission.id,
+        company: submission.company || "Unknown",
+        project: submission.project || null,
+        industry: submission.industry || null,
+        status: submission.status || null,
+        created_at: submission.created_at || null,
+        full_name: submission.full_name || null,
+        work_email: submission.work_email || null,
+        company_website: submission.company_website || null,
+        company_size: submission.company_size || null,
+        data_type: submission.data_type || null,
+        dataset_size: submission.dataset_size || null,
+        timeline: submission.timeline || null,
+        project_description: submission.project_description || null,
+        archived_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (archiveResult.error) {
+      if (isMissingTableOrColumnError(archiveResult.error)) {
+        return res.status(500).json({
+          error: "archived_contact_submissions is not set up yet. Run server/sql/archived_contact_submissions.sql.",
+        });
+      }
+
+      throw archiveResult.error;
+    }
+
     const { error } = await supabaseAdmin
       .from("contact_submissions")
       .delete()
@@ -2294,7 +2543,7 @@ app.delete("/api/admin/submissions/:id", async (req, res) => {
     return res.status(204).send();
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: "Failed to delete submission." });
+    return res.status(500).json({ error: "Failed to archive demo request." });
   }
 });
 
@@ -2362,22 +2611,202 @@ app.get("/api/admin/profiles", async (req, res) => {
       return res.status(500).json({ error: "Supabase service role key not configured." });
     }
 
-    const { data, error } = await supabaseAdmin
+    let { data, error } = await supabaseAdmin
       .from("profiles")
-      .select("id,email,role,created_at")
+      .select("id,name,email,role,created_at")
       .order("created_at", { ascending: false });
+
+    if (error && isMissingColumnError(error)) {
+      const fallback = await supabaseAdmin
+        .from("profiles")
+        .select("id,email,role,created_at")
+        .order("created_at", { ascending: false });
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) throw error;
     const profiles = data.map((row) => ({
       id: row.id,
-      name: row.email || "User",
-      role: row.role,
+      name: row.name || formatProfileNameFromEmail(row.email),
+      email: row.email || "",
+      role: row.role || "",
       status: "Active",
+      created_at: row.created_at || null,
     }));
     return res.status(200).json({ data: profiles });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Failed to load profiles." });
+  }
+});
+
+app.post("/api/admin/profiles", async (req, res) => {
+  try {
+    if (!supabaseAdminReady) {
+      return res.status(500).json({ error: "Supabase service role key not configured." });
+    }
+
+    const name = normalizeText(req.body?.name || "");
+    const email = normalizeText(req.body?.email || "").toLowerCase();
+    const role = normalizeText(req.body?.role || "");
+    const password = String(req.body?.password || "");
+
+    if (!name) {
+      return res.status(400).json({ error: "Name is required." });
+    }
+    if (!isValidBasicEmail(email)) {
+      return res.status(400).json({ error: "A valid email is required." });
+    }
+    if (!role) {
+      return res.status(400).json({ error: "Role is required." });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters." });
+    }
+
+    const { data: createdUserData, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        name,
+        full_name: name,
+      },
+    });
+
+    if (createUserError) throw createUserError;
+    const userId = createdUserData?.user?.id;
+    if (!userId) {
+      return res.status(500).json({ error: "Failed to create user account." });
+    }
+
+    let profilePayload = {
+      id: userId,
+      name,
+      email,
+      role,
+    };
+
+    let insertResult = await supabaseAdmin.from("profiles").insert(profilePayload).select("id,name,email,role,created_at").single();
+    if (insertResult.error && isMissingColumnError(insertResult.error)) {
+      profilePayload = {
+        id: userId,
+        email,
+        role,
+      };
+      insertResult = await supabaseAdmin.from("profiles").insert(profilePayload).select("id,email,role,created_at").single();
+    }
+
+    if (insertResult.error) {
+      await supabaseAdmin.auth.admin.deleteUser(userId).catch(() => undefined);
+      throw insertResult.error;
+    }
+
+    const row = insertResult.data || {};
+    return res.status(201).json({
+      data: {
+        id: row.id || userId,
+        name: row.name || name,
+        email: row.email || email,
+        role: row.role || role,
+        status: "Active",
+        created_at: row.created_at || new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Failed to create user." });
+  }
+});
+
+app.patch("/api/admin/profiles/:id", async (req, res) => {
+  try {
+    if (!supabaseAdminReady) {
+      return res.status(500).json({ error: "Supabase service role key not configured." });
+    }
+
+    const profileId = req.params.id;
+    const name = normalizeText(req.body?.name || "");
+    const email = normalizeText(req.body?.email || "").toLowerCase();
+    const role = normalizeText(req.body?.role || "");
+
+    if (!profileId) {
+      return res.status(400).json({ error: "Profile id is required." });
+    }
+    if (!name) {
+      return res.status(400).json({ error: "Name is required." });
+    }
+    if (!isValidBasicEmail(email)) {
+      return res.status(400).json({ error: "A valid email is required." });
+    }
+    if (!role) {
+      return res.status(400).json({ error: "Role is required." });
+    }
+
+    const { error: updateUserError } = await supabaseAdmin.auth.admin.updateUserById(profileId, {
+      email,
+      user_metadata: {
+        name,
+        full_name: name,
+      },
+    });
+
+    if (updateUserError) throw updateUserError;
+
+    let updateResult = await supabaseAdmin
+      .from("profiles")
+      .update({ name, email, role })
+      .eq("id", profileId)
+      .select("id,name,email,role,created_at")
+      .single();
+
+    if (updateResult.error && isMissingColumnError(updateResult.error)) {
+      updateResult = await supabaseAdmin
+        .from("profiles")
+        .update({ email, role })
+        .eq("id", profileId)
+        .select("id,email,role,created_at")
+        .single();
+    }
+
+    if (updateResult.error) throw updateResult.error;
+
+    const row = updateResult.data || {};
+    return res.status(200).json({
+      data: {
+        id: row.id || profileId,
+        name: row.name || name,
+        email: row.email || email,
+        role: row.role || role,
+        status: "Active",
+        created_at: row.created_at || null,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Failed to update user." });
+  }
+});
+
+app.delete("/api/admin/profiles/:id", async (req, res) => {
+  try {
+    if (!supabaseAdminReady) {
+      return res.status(500).json({ error: "Supabase service role key not configured." });
+    }
+
+    const profileId = req.params.id;
+    if (!profileId) {
+      return res.status(400).json({ error: "Profile id is required." });
+    }
+
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(profileId);
+    if (error) throw error;
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Failed to delete user." });
   }
 });
 

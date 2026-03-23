@@ -43,6 +43,9 @@ export const createUserClient = (accessToken = "") =>
     },
   });
 
+export const createAnonClient = () =>
+  createClient(supabaseUrl, supabaseAnonKey, baseOptions);
+
 export const supabaseConfigReady =
   Boolean(supabaseUrl) && Boolean(supabaseAnonKey);
 
