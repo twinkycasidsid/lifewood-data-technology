@@ -14,6 +14,47 @@ const safeName = (value = "") =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
+const sanitizeJobDescription = (value = "") => {
+  const html = String(value || "").trim();
+  if (!html || typeof window === "undefined" || typeof DOMParser === "undefined") return html;
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
+  const root = doc.body.firstElementChild;
+  if (!root) return html;
+
+  root.querySelectorAll("*").forEach((node) => {
+    node.removeAttribute("style");
+    node.removeAttribute("class");
+    node.removeAttribute("dir");
+    if (node.tagName === "FONT") {
+      const fragment = doc.createDocumentFragment();
+      while (node.firstChild) {
+        fragment.appendChild(node.firstChild);
+      }
+      node.replaceWith(fragment);
+    }
+  });
+
+  return root.innerHTML.trim();
+};
+
+const isBulletLine = (value = "") => /^[\u2022\u25CF\u25E6\-*]\s+/.test(String(value || "").trim());
+
+const stripBulletPrefix = (value = "") =>
+  String(value || "")
+    .trim()
+    .replace(/^[\u2022\u25CF\u25E6\-*]\s+/, "")
+    .trim();
+
+const isSectionHeading = (value = "", nextValue = "") => {
+  const current = String(value || "").trim();
+  const next = String(nextValue || "").trim();
+  if (!current) return false;
+  if (current.endsWith(":")) return true;
+  return !isBulletLine(current) && isBulletLine(next) && current.length <= 80;
+};
+
 const JobDetailPage = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -235,7 +276,55 @@ const JobDetailPage = () => {
 
   const renderDescription = (text) => {
     if (!text) return null;
-    return <div dangerouslySetInnerHTML={{ __html: text }} />;
+    return <div className="job-overview-copy" dangerouslySetInnerHTML={{ __html: sanitizeJobDescription(text) }} />;
+  };
+
+  const renderOverview = () => {
+    if (!Array.isArray(job?.overview) || job.overview.length === 0) {
+      return renderDescription(job?.description);
+    }
+
+    const blocks = [];
+    let bulletItems = [];
+
+    const flushBullets = () => {
+      if (!bulletItems.length) return;
+      blocks.push(
+        <ul key={`bullets-${blocks.length}`} className="job-overview-list">
+          {bulletItems.map((item, index) => (
+            <li key={`${item}-${index}`}>{stripBulletPrefix(item)}</li>
+          ))}
+        </ul>,
+      );
+      bulletItems = [];
+    };
+
+    job.overview.forEach((item, index) => {
+      const text = String(item || "").trim();
+      const nextText = String(job.overview[index + 1] || "").trim();
+      if (!text) return;
+
+      if (isBulletLine(text)) {
+        bulletItems.push(text);
+        return;
+      }
+
+      flushBullets();
+
+      if (isSectionHeading(text, nextText)) {
+        blocks.push(
+          <h4 key={`heading-${index}`} className="job-overview-heading">
+            {text.replace(/:\s*$/, "")}
+          </h4>,
+        );
+        return;
+      }
+
+      blocks.push(<p key={`paragraph-${index}`}>{text}</p>);
+    });
+
+    flushBullets();
+    return blocks;
   };
 
   const [job, setJob] = useState(null);
@@ -322,6 +411,17 @@ const JobDetailPage = () => {
       setFormData((prev) => ({ ...prev, position: job.title }));
     }
   }, [job]);
+
+  const normalizedJobStatus = String(job?.status || "").trim().toLowerCase();
+  const isApplicationAvailable = normalizedJobStatus === "active" || !normalizedJobStatus;
+  const isJobPaused = normalizedJobStatus === "paused";
+  const isJobClosed = normalizedJobStatus === "closed";
+
+  useEffect(() => {
+    if (!isApplicationAvailable && activeTab === "application") {
+      setActiveTab("overview");
+    }
+  }, [activeTab, isApplicationAvailable]);
 
   if (isLoading) {
     return (
@@ -530,6 +630,10 @@ const JobDetailPage = () => {
           background: transparent;
           cursor: pointer;
         }
+        .job-tab-btn:disabled {
+          cursor: not-allowed;
+          opacity: 0.45;
+        }
         .job-content {
           display: grid;
           grid-template-columns: 1fr;
@@ -544,12 +648,48 @@ const JobDetailPage = () => {
           font-size: 16px;
           font-weight: 800;
         }
+        .job-overview-heading {
+          margin: 0 0 10px;
+          font-size: 14px;
+          font-weight: 800;
+          color: #27372f;
+        }
         .job-section p {
           margin: 0 0 10px;
-          color: rgba(26,46,30,0.65);
-          line-height: 1.7;
+          color: rgba(20, 24, 22, 0.82);
+          line-height: 1.5;
           font-size: 13.5px;
           max-width: none;
+        }
+        .job-overview-copy ul,
+        .job-overview-copy ol,
+        .job-overview-list,
+        .job-section ul,
+        .job-section ol {
+          margin: 0 0 10px;
+          padding-left: 34px;
+          color: rgba(20, 24, 22, 0.82);
+        }
+        .job-overview-copy li,
+        .job-overview-list li,
+        .job-section li {
+          margin: 0 0 5px;
+          padding-left: 6px;
+          line-height: 1.4;
+        }
+        .job-overview-copy * {
+          color: inherit;
+          font-size: inherit;
+          line-height: inherit;
+          font-family: inherit;
+        }
+        .job-overview-copy p:last-child,
+        .job-overview-copy ul:last-child,
+        .job-overview-copy ol:last-child,
+        .job-section p:last-child,
+        .job-section ul:last-child,
+        .job-section ol:last-child {
+          margin-bottom: 0;
         }
         .job-form {
           display: grid;
@@ -783,6 +923,7 @@ const JobDetailPage = () => {
             type="button"
             className={`job-tab job-tab-btn ${activeTab === "application" ? "active" : ""}`}
             onClick={() => setActiveTab("application")}
+            disabled={!isApplicationAvailable}
           >
             Application
           </button>
@@ -792,13 +933,20 @@ const JobDetailPage = () => {
           {activeTab === "overview" && (
             <div className="job-section">
               <h3>Description</h3>
-            {Array.isArray(job.overview) && job.overview.length > 0
-              ? job.overview.map((para) => <p key={para}>{para}</p>)
-              : renderDescription(job.description)}
+              {renderOverview()}
+              {!isApplicationAvailable ? (
+                <div className="admin-rich-editor is-readonly admin-application-note" style={{ marginTop: "18px" }}>
+                  {isJobPaused
+                    ? "Applications for this role are currently paused. Only the overview is available right now."
+                    : isJobClosed
+                      ? "This role is closed and is no longer accepting applications."
+                      : "Applications are currently unavailable for this role."}
+                </div>
+              ) : null}
             </div>
           )}
 
-          {activeTab === "application" && (
+          {activeTab === "application" && isApplicationAvailable && (
             <form className="job-form" onSubmit={handleSubmit}>
               <div className="job-form-grid">
                 <div className="job-field">

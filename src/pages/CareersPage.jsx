@@ -1,7 +1,6 @@
 ﻿import { useState, useEffect, useRef } from "react";
 import { motion, useInView, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import jobs from "../data/jobs";
 import { supabase } from "../lib/supabaseClient";
 import {
   IconMapPin,
@@ -275,9 +274,7 @@ const TraitTicker = () => {
 
 const ApplyButton = ({ large = false, dark = false }) => (
   <a
-    href="https://application-form-ph.vercel.app/"
-    target="_blank"
-    rel="noopener noreferrer"
+    href="#job-openings"
     style={{
       display: "inline-flex",
       alignItems: "center",
@@ -335,7 +332,7 @@ const CareersPage = () => {
   const [location, setLocation] = useState("");
   const [department, setDepartment] = useState("");
   const [workType, setWorkType] = useState("");
-  const [jobsData, setJobsData] = useState(jobs.map(normalizeJob));
+  const [jobsData, setJobsData] = useState([]);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [jobsError, setJobsError] = useState("");
   const [page, setPage] = useState(1);
@@ -358,7 +355,9 @@ const CareersPage = () => {
         }
 
         if (Array.isArray(data)) {
-          const normalized = data.map(normalizeJob);
+          const normalized = data
+            .map(normalizeJob)
+            .filter((item) => String(item?.status || "").trim().toLowerCase() !== "closed");
           if (isMounted) {
             setJobsData(normalized);
           }
@@ -366,8 +365,8 @@ const CareersPage = () => {
       } catch (err) {
         console.error(err);
         if (isMounted) {
-          setJobsError("Unable to load live job listings. Showing defaults.");
-          setJobsData(jobs.map(normalizeJob));
+          setJobsError("Unable to load live job listings.");
+          setJobsData([]);
         }
       } finally {
         if (isMounted) {
@@ -389,12 +388,14 @@ const CareersPage = () => {
   const workTypeOptions = Array.from(new Set(jobsData.map((j) => j.workType))).filter(Boolean);
 
   const filteredJobs = jobsData.filter((job) => {
+    const isClosed = String(job.status || "").trim().toLowerCase() === "closed";
     const matchesSearch = job.title.toLowerCase().includes(search.toLowerCase());
     const matchesWorkplace = workplace ? job.workplace === workplace : true;
     const matchesLocation = location ? job.location === location : true;
     const matchesDepartment = department ? job.department === department : true;
     const matchesWorkType = workType ? job.workType === workType : true;
     return (
+      !isClosed &&
       matchesSearch &&
       matchesWorkplace &&
       matchesLocation &&

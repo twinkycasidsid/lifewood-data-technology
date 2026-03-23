@@ -9611,6 +9611,10 @@ img {
 
 .admin-listing-count {
   margin: 14px 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   font-size: 12px;
   color: rgba(16, 35, 25, 0.55);
 }
@@ -10256,6 +10260,13 @@ img {
   color: rgba(16, 35, 25, 0.6);
 }
 
+.admin-table-title .admin-table-value,
+.admin-table-meta .admin-table-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: #000000;
+}
+
 .admin-table-meta {
   display: flex;
   flex-direction: column;
@@ -10269,6 +10280,43 @@ img {
 .admin-table-meta span {
   font-size: 11px;
   color: rgba(16, 35, 25, 0.6);
+}
+
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 0;
+}
+
+.admin-pagination span {
+  font-size: 13px;
+  color: rgba(16, 35, 25, 0.72);
+}
+
+.admin-pagination-arrow {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(16, 35, 25, 0.14);
+  background: #ffffff;
+  color: #1a1a1a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.admin-pagination-arrow:hover:not(:disabled) {
+  background: #f5f7f2;
+  border-color: rgba(16, 35, 25, 0.24);
+}
+
+.admin-pagination-arrow:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
 }
 
 .tag {

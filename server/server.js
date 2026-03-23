@@ -45,7 +45,7 @@ app.use(
 
             callback(null, false);
           },
-          methods: ["GET", "POST", "PATCH", "OPTIONS"],
+          methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
           allowedHeaders: ["Content-Type", "Authorization"],
         }
       : undefined,
@@ -89,6 +89,12 @@ const ensureSupabaseConfigured = (res) => {
 
 const normalizeText = (value = "") => String(value || "").replace(/\s+/g, " ").trim();
 const isValidBasicEmail = (value = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+const normalizeInquiryStatus = (value = "", hasReply = false) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "reply sent" || normalized === "replied") return "Reply Sent";
+  if (normalized === "pending" || normalized === "new") return "Pending";
+  return hasReply ? "Reply Sent" : "Pending";
+};
 const extractCalendlyUuid = (uri = "") => {
   const cleaned = String(uri || "").split("?")[0].replace(/\/+$/, "");
   const parts = cleaned.split("/");
@@ -1857,6 +1863,37 @@ app.delete("/api/admin/applications/:id", async (req, res) => {
       return res.status(400).json({ error: "Application id is required." });
     }
 
+    const { data: application, error: applicationError } = await supabaseAdmin
+      .from("job_applications")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (applicationError || !application) {
+      return res.status(404).json({ error: "Application not found." });
+    }
+
+    const { id: _applicationId, ...applicationPayload } = application;
+    const archiveResult = await supabaseAdmin
+      .from("archived_job_applications")
+      .insert({
+        ...applicationPayload,
+        original_application_id: application.id,
+        archived_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (archiveResult.error) {
+      if (archiveResult.error.code === "42P01" || archiveResult.error.code === "42703") {
+        return res.status(500).json({
+          error: "archived_job_applications is not set up yet. Run server/sql/archived_job_applications.sql.",
+        });
+      }
+
+      throw archiveResult.error;
+    }
+
     const { error } = await supabaseAdmin
       .from("job_applications")
       .delete()
@@ -2057,7 +2094,7 @@ app.get("/api/admin/inquiries", async (req, res) => {
           ...item,
           reply_message: null,
           replied_at: null,
-          status: "New",
+          status: "Pending",
         }));
         error = null;
       } else if (error.code === "42P01") {
@@ -2069,7 +2106,12 @@ app.get("/api/admin/inquiries", async (req, res) => {
       throw error;
     }
 
-    return res.status(200).json({ data });
+    return res.status(200).json({
+      data: (data || []).map((item) => ({
+        ...item,
+        status: normalizeInquiryStatus(item?.status, Boolean(item?.reply_message || item?.replied_at)),
+      })),
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Failed to load inquiries." });
@@ -2094,10 +2136,13 @@ app.patch("/api/admin/inquiries/:id", async (req, res) => {
     }
 
     const updates = {};
-    if (typeof status !== "undefined") updates.status = status;
+    if (typeof status !== "undefined") {
+      updates.status = normalizeInquiryStatus(status, Boolean(reply_message));
+    }
     if (typeof reply_message !== "undefined") {
       updates.reply_message = reply_message;
       updates.replied_at = reply_message ? new Date().toISOString() : null;
+      updates.status = reply_message ? "Reply Sent" : normalizeInquiryStatus(status);
     }
 
     const { data, error } = await supabaseAdmin
@@ -2263,7 +2308,7 @@ app.post("/api/inquiries", async (req, res) => {
         email,
         inquiry_type: inquiryType,
         message,
-        status: "New",
+        status: "Pending",
       })
       .select("id")
       .single();

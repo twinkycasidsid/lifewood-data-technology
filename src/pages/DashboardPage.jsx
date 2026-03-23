@@ -26,6 +26,31 @@ import emailjs from '@emailjs/browser'
 import { supabase } from '../lib/supabaseClient'
 import { buildScreeningLink } from '../utils/screeningLink'
 
+const sanitizeListingDescription = (value = '') => {
+  const html = String(value || '').trim()
+  if (!html || typeof window === 'undefined' || typeof DOMParser === 'undefined') return html
+
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html')
+  const root = doc.body.firstElementChild
+  if (!root) return html
+
+  root.querySelectorAll('*').forEach((node) => {
+    node.removeAttribute('style')
+    node.removeAttribute('class')
+    node.removeAttribute('dir')
+    if (node.tagName === 'FONT') {
+      const fragment = doc.createDocumentFragment()
+      while (node.firstChild) {
+        fragment.appendChild(node.firstChild)
+      }
+      node.replaceWith(fragment)
+    }
+  })
+
+  return root.innerHTML.trim()
+}
+
 const DashboardPage = ({ onNavigate = () => {} }) => {
   const [activePanel, setActivePanel] = useState('dashboard')
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
@@ -37,6 +62,8 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
   const [isDeleteListingModalOpen, setIsDeleteListingModalOpen] = useState(false)
   const [isEditingListing, setIsEditingListing] = useState(false)
   const [selectedListing, setSelectedListing] = useState(null)
+  const [listingActionError, setListingActionError] = useState('')
+  const [listingActionSuccess, setListingActionSuccess] = useState('')
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false)
   const [selectedApplication, setSelectedApplication] = useState(null)
   const [isDeleteApplicationModalOpen, setIsDeleteApplicationModalOpen] = useState(false)
@@ -99,9 +126,11 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
   const [applicationRoleFilter, setApplicationRoleFilter] = useState('')
   const [applicationStatusFilter, setApplicationStatusFilter] = useState('')
   const [submissionIndustryFilter, setSubmissionIndustryFilter] = useState('')
-  const [submissionStatusFilter, setSubmissionStatusFilter] = useState('')
   const [inquiryTypeFilter, setInquiryTypeFilter] = useState('')
   const [inquiryStatusFilter, setInquiryStatusFilter] = useState('')
+  const [applicationPage, setApplicationPage] = useState(1)
+  const [submissionPage, setSubmissionPage] = useState(1)
+  const [inquiryPage, setInquiryPage] = useState(1)
   const [notifications, setNotifications] = useState([])
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const listingEditorRef = useRef(null)
@@ -122,6 +151,13 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
   const sidebarLogo = isSidebarCollapsed
     ? '/lifewood-logo-collapsed.png'
     : 'https://framerusercontent.com/images/Ca8ppNsvJIfTsWEuHr50gvkDow.png?scale-down-to=1024&width=2624&height=474'
+
+  const normalizeInquiryStatus = (value = '', hasReply = false) => {
+    const normalized = String(value || '').trim().toLowerCase()
+    if (normalized === 'reply sent' || normalized === 'replied') return 'Reply Sent'
+    if (normalized === 'pending' || normalized === 'new') return 'Pending'
+    return hasReply ? 'Reply Sent' : 'Pending'
+  }
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: IconLayoutDashboard },
@@ -1095,7 +1131,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
             message: item.message || '',
             replyMessage: item.reply_message || '',
             repliedAt: item.replied_at || '',
-            status: item.status || 'New',
+            status: normalizeInquiryStatus(item.status, Boolean(item.reply_message || item.replied_at)),
             createdAt: item.created_at || item.createdAt,
           }))
         )
@@ -1179,6 +1215,15 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       editEditorRef.current.innerHTML = editForm.description || selectedListing?.description || ''
     }
   }, [isListingModalOpen, editForm.description, selectedListing])
+
+  useEffect(() => {
+    if (isListingFormOpen || isListingModalOpen || isDeleteListingModalOpen) return
+    const timeoutId = window.setTimeout(() => {
+      setListingActionError('')
+      setListingActionSuccess('')
+    }, 2500)
+    return () => window.clearTimeout(timeoutId)
+  }, [isDeleteListingModalOpen, isListingFormOpen, isListingModalOpen, listingActionError, listingActionSuccess])
 
   const applicationTrend = useMemo(() => {
     const days = []
@@ -1331,19 +1376,14 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
     [submissions]
   )
 
-  const submissionStatusOptions = useMemo(
-    () => Array.from(new Set(submissions.map((item) => item.status).filter(Boolean))).sort(),
-    [submissions]
-  )
-
   const inquiryTypeOptions = useMemo(
     () => Array.from(new Set(inquiries.map((item) => item.inquiryType).filter(Boolean))).sort(),
     [inquiries]
   )
 
   const inquiryStatusOptions = useMemo(
-    () => Array.from(new Set(inquiries.map((item) => item.status).filter(Boolean))).sort(),
-    [inquiries]
+    () => ['Pending', 'Reply Sent'],
+    []
   )
 
   const filteredApplications = useMemo(
@@ -1387,10 +1427,9 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         .filter(Boolean)
         .some((field) => field.toString().toLowerCase().includes(searchValue))
       const matchesIndustry = submissionIndustryFilter ? item.industry === submissionIndustryFilter : true
-      const matchesStatus = submissionStatusFilter ? item.status === submissionStatusFilter : true
-      return matchesSearch && matchesIndustry && matchesStatus
+      return matchesSearch && matchesIndustry
     })
-  }, [listingSearch, submissionIndustryFilter, submissionStatusFilter, submissions])
+  }, [listingSearch, submissionIndustryFilter, submissions])
 
   const filteredInquiries = useMemo(() => {
     const searchValue = listingSearch.trim().toLowerCase()
@@ -1413,6 +1452,54 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         .some((field) => field.toString().toLowerCase().includes(searchValue))
       )
   }, [listingSearch, profiles])
+
+  const recordsPerPage = 10
+
+  const pagedApplications = useMemo(
+    () => filteredApplications.slice((applicationPage - 1) * recordsPerPage, applicationPage * recordsPerPage),
+    [applicationPage, filteredApplications]
+  )
+
+  const pagedSubmissions = useMemo(
+    () => filteredSubmissions.slice((submissionPage - 1) * recordsPerPage, submissionPage * recordsPerPage),
+    [filteredSubmissions, submissionPage]
+  )
+
+  const pagedInquiries = useMemo(
+    () => filteredInquiries.slice((inquiryPage - 1) * recordsPerPage, inquiryPage * recordsPerPage),
+    [filteredInquiries, inquiryPage]
+  )
+
+  const applicationPageCount = Math.max(1, Math.ceil(filteredApplications.length / recordsPerPage))
+  const submissionPageCount = Math.max(1, Math.ceil(filteredSubmissions.length / recordsPerPage))
+  const inquiryPageCount = Math.max(1, Math.ceil(filteredInquiries.length / recordsPerPage))
+
+  useEffect(() => {
+    setApplicationPage(1)
+  }, [applicationRoleFilter, applicationStatusFilter, listingSearch])
+
+  useEffect(() => {
+    setSubmissionPage(1)
+  }, [listingSearch, submissionIndustryFilter])
+
+  useEffect(() => {
+    setInquiryPage(1)
+  }, [inquiryStatusFilter, inquiryTypeFilter, listingSearch])
+
+  const renderPagination = (page, pageCount, onChange) => {
+    if (pageCount <= 1) return null
+    return (
+      <div className="admin-pagination">
+        <button type="button" className="admin-pagination-arrow" onClick={() => onChange(page - 1)} disabled={page === 1} aria-label="Previous page">
+          <IconChevronLeft size={16} />
+        </button>
+        <span>Page {page} of {pageCount}</span>
+        <button type="button" className="admin-pagination-arrow" onClick={() => onChange(page + 1)} disabled={page === pageCount} aria-label="Next page">
+          <IconChevronRight size={16} />
+        </button>
+      </div>
+    )
+  }
 
   const normalizeLookupValue = (value = '') =>
     String(value)
@@ -1678,7 +1765,6 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
 
   const clearSubmissionFilters = () => {
     setSubmissionIndustryFilter('')
-    setSubmissionStatusFilter('')
   }
 
   const clearInquiryFilters = () => {
@@ -1807,7 +1893,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            status: 'Replied',
+            status: 'Reply Sent',
             reply_message: replyBody,
           }),
         })
@@ -1821,13 +1907,13 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       setInquiries((prev) =>
         prev.map((item) =>
           item.id === selectedInquiry.id
-            ? { ...item, status: 'Replied', replyMessage: replyBody, repliedAt: new Date().toISOString() }
+            ? { ...item, status: 'Reply Sent', replyMessage: replyBody, repliedAt: new Date().toISOString() }
             : item
         )
       )
       setSelectedInquiry((prev) => (
         prev
-          ? { ...prev, status: 'Replied', replyMessage: replyBody, repliedAt: new Date().toISOString() }
+          ? { ...prev, status: 'Reply Sent', replyMessage: replyBody, repliedAt: new Date().toISOString() }
           : prev
       ))
       setInquiryReplyDraft(replyBody)
@@ -2258,7 +2344,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to delete application.')
+        throw new Error('Failed to archive application.')
       }
 
       setApplications((prev) => prev.filter((item) => item.id !== applicationPendingDelete.id))
@@ -2330,6 +2416,8 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
   )
   const handleCreateListing = async () => {
     setIsCreatingListing(true)
+    setListingActionError('')
+    setListingActionSuccess('')
     try {
       const payload = {
         title: listingForm.title,
@@ -2337,7 +2425,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         location: listingForm.location,
         workplace: listingForm.workplace,
         work_type: listingForm.workType,
-        description: listingForm.description,
+        description: sanitizeListingDescription(listingForm.description),
         status: listingForm.status,
       }
 
@@ -2362,16 +2450,19 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         description: '',
         status: 'Active',
       })
-      setIsListingFormOpen(false)
       await loadAdminData()
+      setListingActionSuccess('Job listing created successfully.')
     } catch (error) {
       console.error(error)
+      setListingActionError('Failed to create job listing.')
     } finally {
       setIsCreatingListing(false)
     }
   }
 
   const openListingModal = (listing) => {
+    setListingActionError('')
+    setListingActionSuccess('')
     setSelectedListing(listing)
     setEditForm({
       title: listing.title || '',
@@ -2391,6 +2482,8 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
 
   const handleUpdateListing = async () => {
     if (!selectedListing?.id) return
+    setListingActionError('')
+    setListingActionSuccess('')
     try {
       const payload = {
         title: editForm.title,
@@ -2398,7 +2491,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         location: editForm.location,
         workplace: editForm.workplace,
         work_type: editForm.workType,
-        description: editForm.description,
+        description: sanitizeListingDescription(editForm.description),
         status: editForm.status,
       }
 
@@ -2414,13 +2507,17 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
 
       await loadAdminData()
       setIsEditingListing(false)
+      setListingActionSuccess('Job listing updated successfully.')
     } catch (error) {
       console.error(error)
+      setListingActionError('Failed to update job listing.')
     }
   }
 
   const handleDeleteListing = async () => {
     if (!selectedListing?.id) return
+    setListingActionError('')
+    setListingActionSuccess('')
     try {
       const response = await fetch(`${apiBaseUrl}/api/admin/listings/${selectedListing.id}`, {
         method: 'DELETE',
@@ -2434,8 +2531,10 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       setIsListingModalOpen(false)
       setSelectedListing(null)
       await loadAdminData()
+      setListingActionSuccess('Job listing deleted successfully.')
     } catch (error) {
       console.error(error)
+      setListingActionError('Failed to delete job listing.')
     }
   }
 
@@ -2707,6 +2806,16 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
       <div className="admin-listing-count">
         Showing {filteredJobListings.length} of {jobListings.length} listings
       </div>
+      {listingActionError ? (
+        <div className="admin-rich-editor is-readonly admin-application-note admin-application-status-note is-error">
+          {listingActionError}
+        </div>
+      ) : null}
+      {listingActionSuccess ? (
+        <div className="admin-rich-editor is-readonly admin-application-note admin-application-status-note is-success">
+          {listingActionSuccess}
+        </div>
+      ) : null}
       <AnimatePresence>
         {isListingFormOpen ? (
           <motion.div
@@ -2739,6 +2848,16 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                 </div>
                 <span className="status active">New</span>
               </div>
+              {listingActionError ? (
+                <div className="admin-rich-editor is-readonly admin-application-note admin-application-status-note is-error">
+                  {listingActionError}
+                </div>
+              ) : null}
+              {listingActionSuccess ? (
+                <div className="admin-rich-editor is-readonly admin-application-note admin-application-status-note is-success">
+                  {listingActionSuccess}
+                </div>
+              ) : null}
               <div className="admin-form-grid">
                 <label>
                   Title
@@ -2952,7 +3071,8 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         </div>
       </div>
       <div className="admin-listing-count">
-        Showing {filteredApplications.length} of {applications.length} applications
+        <span>Showing {pagedApplications.length} of {filteredApplications.length} applications</span>
+        {renderPagination(applicationPage, applicationPageCount, setApplicationPage)}
       </div>
       <div className="admin-table-wrap">
         <table className="admin-table">
@@ -2972,7 +3092,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                   No applications found.
                 </td>
               </tr>
-            ) : filteredApplications.map((applicant) => (
+            ) : pagedApplications.map((applicant) => (
               <tr
                 key={applicant.id || applicant.email || applicant.name}
                 className="admin-table-row"
@@ -2988,22 +3108,22 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
               >
                 <td>
                   <div className="admin-table-title">
-                    <strong>{applicant.name}</strong>
+                    <span className="admin-table-value">{applicant.name}</span>
                   </div>
                 </td>
                 <td>
                   <div className="admin-table-meta">
-                    <strong>{applicant.role || '--'}</strong>
+                    <span className="admin-table-value">{applicant.role || '--'}</span>
                   </div>
                 </td>
                 <td>
                   <div className="admin-table-meta">
-                    <strong>{applicant.status}</strong>
+                    <span className="admin-table-value">{applicant.status}</span>
                   </div>
                 </td>
                 <td>
                   <div className="admin-table-meta">
-                    <strong>{applicant.score}</strong>
+                    <span className="admin-table-value">{applicant.score}</span>
                   </div>
                 </td>
                 <td>
@@ -3186,22 +3306,14 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
-          <select
-            value={submissionStatusFilter}
-            onChange={(event) => setSubmissionStatusFilter(event.target.value)}
-          >
-            <option value="">All statuses</option>
-            {submissionStatusOptions.map((option) => (
-              <option key={option} value={option}>{option}</option>
-            ))}
-          </select>
           <button type="button" className="admin-listing-clear" onClick={clearSubmissionFilters}>
             Clear Filters
           </button>
         </div>
       </div>
       <div className="admin-listing-count">
-        Showing {filteredSubmissions.length} of {submissions.length} demo requests
+        <span>Showing {pagedSubmissions.length} of {filteredSubmissions.length} demo requests</span>
+        {renderPagination(submissionPage, submissionPageCount, setSubmissionPage)}
       </div>
       <div className="admin-table-wrap">
         <table className="admin-table">
@@ -3210,7 +3322,6 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
               <th>Company</th>
               <th>Project</th>
               <th>Industry</th>
-              <th>Status</th>
               <th>Received</th>
               <th>Action</th>
             </tr>
@@ -3218,11 +3329,11 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
           <tbody>
             {filteredSubmissions.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: '24px' }}>
+                <td colSpan={5} style={{ textAlign: 'center', padding: '24px' }}>
                   No demo requests found.
                 </td>
               </tr>
-            ) : filteredSubmissions.map((submission) => (
+            ) : pagedSubmissions.map((submission) => (
               <tr
                 key={submission.id}
                 className="admin-table-row"
@@ -3238,27 +3349,22 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
               >
                 <td>
                   <div className="admin-table-title">
-                    <strong>{submission.company}</strong>
+                    <span className="admin-table-value">{submission.company}</span>
                   </div>
                 </td>
                 <td>
                   <div className="admin-table-meta">
-                    <strong>{submission.project}</strong>
+                    <span className="admin-table-value">{submission.project}</span>
                   </div>
                 </td>
                 <td>
                   <div className="admin-table-meta">
-                    <strong>{submission.industry}</strong>
+                    <span className="admin-table-value">{submission.industry}</span>
                   </div>
                 </td>
                 <td>
                   <div className="admin-table-meta">
-                    <strong>{submission.status}</strong>
-                  </div>
-                </td>
-                <td>
-                  <div className="admin-table-meta">
-                    <strong>{formatDateTime(submission.createdAt)}</strong>
+                    <span className="admin-table-value">{formatDateTime(submission.createdAt)}</span>
                   </div>
                 </td>
                 <td>
@@ -3328,7 +3434,8 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
         </div>
       </div>
       <div className="admin-listing-count">
-        Showing {filteredInquiries.length} of {inquiries.length} inquiries
+        <span>Showing {pagedInquiries.length} of {filteredInquiries.length} inquiries</span>
+        {renderPagination(inquiryPage, inquiryPageCount, setInquiryPage)}
       </div>
       <div className="admin-table-wrap">
         <table className="admin-table">
@@ -3349,7 +3456,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                   No inquiries found.
                 </td>
               </tr>
-            ) : filteredInquiries.map((inquiry) => (
+            ) : pagedInquiries.map((inquiry) => (
               <tr
                 key={inquiry.id}
                 className="admin-table-row"
@@ -3365,28 +3472,28 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
               >
                 <td>
                   <div className="admin-table-title">
-                    <strong>{inquiry.fullName}</strong>
+                    <span className="admin-table-value">{inquiry.fullName}</span>
                     <span>{inquiry.email}</span>
                   </div>
                 </td>
                 <td>
                   <div className="admin-table-meta">
-                    <strong>{inquiry.inquiryType}</strong>
+                    <span className="admin-table-value">{inquiry.inquiryType}</span>
                   </div>
                 </td>
                 <td>
                   <div className="admin-table-meta">
-                    <strong>{inquiry.status}</strong>
+                    <span className="admin-table-value">{inquiry.status}</span>
                   </div>
                 </td>
                 <td>
                   <div className="admin-table-meta">
-                    <strong>{formatDateTime(inquiry.createdAt)}</strong>
+                    <span className="admin-table-value">{formatDateTime(inquiry.createdAt)}</span>
                   </div>
                 </td>
                 <td>
                   <div className="admin-table-meta">
-                    <strong>{formatDateTime(inquiry.repliedAt)}</strong>
+                    <span className="admin-table-value">{formatDateTime(inquiry.repliedAt)}</span>
                   </div>
                 </td>
                 <td>
@@ -3743,6 +3850,16 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                   <h2>Job Listing Details</h2>
                 </div>
               </div>
+              {listingActionError ? (
+                <div className="admin-rich-editor is-readonly admin-application-note admin-application-status-note is-error">
+                  {listingActionError}
+                </div>
+              ) : null}
+              {listingActionSuccess ? (
+                <div className="admin-rich-editor is-readonly admin-application-note admin-application-status-note is-success">
+                  {listingActionSuccess}
+                </div>
+              ) : null}
 
               <div className="admin-form-grid">
                 <label>
@@ -4391,14 +4508,14 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
               </button>
               <div className="admin-listing-modal-head admin-application-head">
                 <div className="admin-application-head-copy">
-                  <h2>Delete Applicant</h2>
+                  <h2>Archive Applicant</h2>
                   <p>{applicationPendingDelete?.name || 'This applicant'}</p>
                 </div>
               </div>
               <div className="admin-application-body">
                 <div className="admin-application-scroll">
                   <div className="admin-rich-editor is-readonly admin-application-note">
-                    This will permanently delete the application record. This action cannot be undone.
+                    This will move the application to archived records. You can restore it at any time.
                   </div>
                 </div>
               </div>
@@ -4407,7 +4524,7 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                   Cancel
                 </button>
                 <button type="button" className="admin-btn danger" onClick={handleDeleteApplication}>
-                  Delete
+                  Archive
                 </button>
               </div>
             </motion.section>
@@ -4446,9 +4563,6 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                   <p>{selectedSubmission?.project || 'Project'}</p>
                 </div>
                 <div className="admin-application-actions">
-                  <span className={`status ${(selectedSubmission?.status || 'new').toLowerCase()}`}>
-                    {selectedSubmission?.status || 'New'}
-                  </span>
                 </div>
               </div>
               <div className="admin-application-body">
@@ -4504,10 +4618,6 @@ const DashboardPage = ({ onNavigate = () => {} }) => {
                       <label>
                         Timeline
                         <input type="text" value={selectedSubmission?.timeline || 'Not provided'} readOnly />
-                      </label>
-                      <label>
-                        Status
-                        <input type="text" value={selectedSubmission?.status || 'Not provided'} readOnly />
                       </label>
                       <label>
                         Received
