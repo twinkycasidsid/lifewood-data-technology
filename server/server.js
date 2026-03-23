@@ -1873,12 +1873,34 @@ app.delete("/api/admin/applications/:id", async (req, res) => {
       return res.status(404).json({ error: "Application not found." });
     }
 
-    const { id: _applicationId, ...applicationPayload } = application;
     const archiveResult = await supabaseAdmin
       .from("archived_job_applications")
       .insert({
-        ...applicationPayload,
         original_application_id: application.id,
+        name: normalizeText(
+          application.name ||
+            `${application.first_name || ""} ${application.middle_name || ""} ${application.last_name || ""}`,
+        ) || "Unknown Applicant",
+        role: application.role || application.position_applied || null,
+        stage: application.stage || null,
+        status: application.status || null,
+        score: application.score ?? null,
+        created_at: application.created_at || null,
+        first_name: application.first_name || null,
+        middle_name: application.middle_name || null,
+        last_name: application.last_name || null,
+        email: application.email || null,
+        phone: application.phone || null,
+        gender: application.gender || null,
+        age: application.age ?? null,
+        country: application.country || null,
+        current_address: application.current_address || application.address || null,
+        position_applied: application.position_applied || null,
+        cv_url: application.cv_url || null,
+        ai_analysis: application.ai_analysis || null,
+        ai_recommendation: application.ai_recommendation || null,
+        pre_screening_results: application.pre_screening_results || null,
+        job_id: application.job_id || null,
         archived_at: new Date().toISOString(),
       })
       .select("id")
